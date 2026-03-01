@@ -79,6 +79,10 @@ export const resolveModel = (type: 'chat' | 'image' | 'video', modelId?: string)
 
     const candidates = getModels(type).filter(m => m.apiModel === lookupId);
     if (candidates.length === 1) return candidates[0];
+
+    // Explicit modelId provided but not found in registry: keep it as a raw request model
+    // instead of silently falling back to the active model.
+    return undefined;
   }
 
   return getActiveModel(type);
