@@ -1,4 +1,4 @@
-# BigBanana AI Director (AI 漫剧工场)
+# BigBanana AI Director (AI 漫剧工场)二开
 
 > **AI 一站式短剧/漫剧生成平台**
 > *Industrial AI Motion Comic & Video Workbench*
@@ -11,6 +11,42 @@
 **BigBanana AI Director** 是一个 **AI 一站式短剧/漫剧平台**，面向创作者,实现从灵感到成片的高效生产。
 
 它摇弃了传统的"抽卡式"生成，采用 **"Script-to-Asset-to-Keyframe"** 的工业化工作流。通过可配置的多模型接入能力，实现 **"一句话生成完整短剧，从剧本到成片全自动化"**，同时精准控制角色一致性、场景连续性与镜头运动。
+
+## 对比原仓库：本 fork（zhuchenyu2008）的主要改动（相对上游 shuyu-labs）
+
+> 合并记录（按时间）：PR #1（2026-03-01）、PR #2/#3/#4/#5（2026-03-02）（北京时间，按 GitHub 页面显示日期）
+
+### 1) 模型配置：改为“云端模型注册中心（空白启动）”
+- 新增 `config-api`（SQLite）用于**集中持久化**模型注册表（providers/models/activeModels/globalApiKey）。
+- 移除内置 providers/models 默认值：**首次启动注册中心为空**，需要你在 UI 里自行添加提供商/模型并设置默认模型。
+- 前端启动会先加载注册中心，避免“界面配置了自定义模型但请求偷偷回退到默认模型”的错觉。
+
+### 2) 存储：从浏览器本地（IndexedDB/OPFS）迁移为“云端单用户持久化”
+- 项目/剧集/分镜/资产等数据不再依赖浏览器本地数据库，统一走 `/api/config/storage/*`。
+- `config-api` 支持 batch-upsert / batch-delete，减少频繁写入，提高 autosave 稳定性。
+- `.gitignore` 默认忽略 `data/` 和 `*.db`，避免把运行时数据提交到仓库。
+
+### 3) 部署与网络：默认端口统一为 13000，并支持反代/跨域场景
+- Vite dev server 默认端口：`13000`。
+- Docker 部署后 Web 暴露在 `http://localhost:13000`。
+- nginx 反代：
+  - `/api/config/` -> `config-api`
+  - `/api/media-proxy` -> `media-proxy`（用于拉取远程媒体并处理 Range/CORS）
+
+### 4) 可靠性与兼容性：autosave、网关返回、引用图降级等
+- autosave 改为**串行 + 去抖**，减少并发冲突与超时；并增加对 `HTTP 413` 的“本会话降噪保护”，避免重复失败刷屏。
+- 增强网关兼容：支持把“本应是 JSON 却被包成 SSE data 行”的响应做兼容解析。
+- 保留“引用图不被网关接受时的降级继续生成”，但会在 UI 给出更明确的提示（避免用户误以为引用已生效）。
+
+### 5) 九宫格（storyboard-grid）视频稳定性（PR #5 新增）
+- 调整 storyboard-grid 模式的视频输入策略：
+  - `start frame`：使用关键帧（keyframe）图
+  - `aux reference`：九宫格图作为第二参考（当模型支持双参考时）
+- 增加运行时日志（例如 `startSource=keyframe`、`auxRef=nine-grid|end-keyframe|none`）便于排查。
+- 当“双参考”任务失败时：自动**回退重试一次**为“单参考（仅 start frame）”，提升不稳定网关/模型下的成功率。
+
+---
+
 
 ## 界面展示
 
