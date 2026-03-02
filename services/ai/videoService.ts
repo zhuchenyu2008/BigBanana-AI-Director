@@ -42,7 +42,8 @@ const generateVideoAsync = async (
   apiKey: string,
   aspectRatio: AspectRatio = '16:9',
   duration: VideoDuration = 8,
-  modelName: string = 'sora-2'
+  modelName: string = 'sora-2',
+  allowDualRefFallback: boolean = true
 ): Promise<string> => {
   let references = [startImageBase64, endImageBase64].filter(Boolean) as string[];
   const resolvedModelName = modelName || 'sora-2';
@@ -179,6 +180,21 @@ const generateVideoAsync = async (
         statusData?.error?.code ||
         statusData?.message ||
         '未知错误';
+      if (allowDualRefFallback && useReferenceArray && references.length >= 2) {
+        console.warn(
+          `⚠️ ${resolvedModelName} 双参考任务失败，自动降级为单参考重试。原始错误: ${errorMessage}`
+        );
+        return generateVideoAsync(
+          prompt,
+          references[0],
+          undefined,
+          apiKey,
+          aspectRatio,
+          duration,
+          resolvedModelName,
+          false
+        );
+      }
       throw new Error(`视频生成失败: ${errorMessage}`);
     }
   }
