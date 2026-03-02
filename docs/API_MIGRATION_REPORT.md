@@ -31,7 +31,7 @@
 ### 5. **README.md** ✅
 - 更新中文文档，将 Google Gemini 改为 AntSK API
 - 更新模型列表
-- 添加购买链接
+- 移除商业推广链接
 
 ### 6. **README_EN.md** ✅
 - 更新英文文档

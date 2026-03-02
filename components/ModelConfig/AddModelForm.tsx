@@ -41,11 +41,24 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
   const [videoMode, setVideoMode] = useState<'sync' | 'async' | 'task'>('sync');
   
   // 提供商配置
-  const [providerMode, setProviderMode] = useState<'existing' | 'custom'>('existing');
-  const [selectedProviderId, setSelectedProviderId] = useState(existingProviders[0]?.id || 'antsk');
+  const [providerMode, setProviderMode] = useState<'existing' | 'custom'>(
+    existingProviders.length > 0 ? 'existing' : 'custom'
+  );
+  const [selectedProviderId, setSelectedProviderId] = useState(existingProviders[0]?.id || '');
   const [customProviderName, setCustomProviderName] = useState('');
   const [customProviderBaseUrl, setCustomProviderBaseUrl] = useState('');
   const [customProviderApiKey, setCustomProviderApiKey] = useState('');
+
+  useEffect(() => {
+    if (providerMode === 'existing' && existingProviders.length === 0) {
+      setProviderMode('custom');
+      setSelectedProviderId('');
+      return;
+    }
+    if (!selectedProviderId && existingProviders.length > 0) {
+      setSelectedProviderId(existingProviders[0].id);
+    }
+  }, [providerMode, existingProviders, selectedProviderId]);
   
   useEffect(() => {
     if (type !== 'video' || providerMode !== 'existing' || videoMode !== 'task') return;
@@ -80,6 +93,9 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
         isDefault: false,
       });
       providerId = newProvider.id;
+    } else if (!providerId) {
+      showAlert('请先添加一个 API 提供商', { type: 'warning' });
+      return;
     }
 
     // 根据模型类型设置默认参数
@@ -277,8 +293,12 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
           <select
             value={selectedProviderId}
             onChange={(e) => setSelectedProviderId(e.target.value)}
+            disabled={existingProviders.length === 0}
             className="w-full bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)]"
           >
+            {existingProviders.length === 0 && (
+              <option value="">暂无可用提供商，请先创建</option>
+            )}
             {existingProviders.map((p) => (
               <option key={p.id} value={p.id}>{p.name} ({p.baseUrl})</option>
             ))}

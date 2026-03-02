@@ -146,14 +146,12 @@ A: 修改 `index.html` 后需要刷新浏览器（Ctrl+F5 强制刷新）。
 ## 📞 获取帮助
 
 - 查看详细报告: `docs/SEO优化报告.md`
-- 官网: https://tree456.com
-- 产品页: https://bigbanana.tree456.com
+- 项目仓库: https://github.com/shuyu-labs/BigBanana-AI-Director
 
 ---
 
 **文档更新**: 2025-12-18  
 **版本**: v1.0
-
 
 
 

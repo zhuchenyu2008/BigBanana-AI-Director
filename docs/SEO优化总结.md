@@ -273,8 +273,7 @@ http://localhost:3000/seo-check.html
 如有任何问题，请参考：
 - 📖 [完整文档目录](./docs/)
 - 🔧 [SEO 检查工具](/seo-check.html)
-- 🌐 [官方网站](https://tree456.com)
-- 🍌 [产品首页](https://bigbanana.tree456.com)
+- 📦 [项目仓库](https://github.com/shuyu-labs/BigBanana-AI-Director)
 
 ---
 
@@ -283,7 +282,6 @@ http://localhost:3000/seo-check.html
 **质量等级**: ⭐⭐⭐⭐⭐
 
 🎉 **恭喜！SEO 优化已全部完成！** 🎉
-
 
 
 

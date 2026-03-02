@@ -18,11 +18,9 @@ export const LANGUAGE_OPTIONS = [
   { label: 'Español (Spanish)', value: 'Spanish' }
 ];
 
+// 注意：项目不再内置任何模型选项。这里仅保留“使用已配置的默认模型 / 自定义”。
 export const MODEL_OPTIONS = [
-  { label: 'GPT-5.2 (推荐)', value: 'gpt-5.2' },
-  { label: 'GPT-5.1', value: 'gpt-5.1' },
-  { label: 'GPT-4.1', value: 'gpt-41' },
-  { label: 'Claude Sonnet 4.5', value: 'claude-sonnet-4-5-20250929' },
+  { label: '使用已配置的默认模型', value: '' },
   { label: '其他 (自定义)', value: 'custom' }
 ];
 
@@ -56,7 +54,7 @@ export const STYLES = {
 export const DEFAULTS = {
   duration: '60s',
   language: '中文',
-  model: 'gpt-5.2',
+  model: '',
   visualStyle: '3d-animation'
 };
 

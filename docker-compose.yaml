@@ -5,9 +5,10 @@ services:
       dockerfile: Dockerfile
     container_name: bigbanana-web
     ports:
-      - "3005:80"
+      - "13000:80"
     depends_on:
       - media-proxy
+      - config-api
     restart: unless-stopped
 
   media-proxy:
@@ -24,4 +25,19 @@ services:
       MEDIA_PROXY_CORS_ORIGIN: "*"
     expose:
       - "8787"
+    restart: unless-stopped
+
+  config-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.config-api
+    container_name: bigbanana-config-api
+    environment:
+      CONFIG_API_PORT: "8788"
+      CONFIG_DB_PATH: "/data/config.db"
+      CONFIG_API_MAX_BODY_BYTES: "1048576"
+    volumes:
+      - ./data:/data
+    expose:
+      - "8788"
     restart: unless-stopped

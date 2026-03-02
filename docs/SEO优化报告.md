@@ -158,8 +158,7 @@ Sitemap: https://bigbanana.tree456.com/sitemap.xml
 包含以下页面：
 - 首页（优先级 1.0）
 - 文档页（优先级 0.8）
-- 官网（优先级 0.7）
-- API 购买页（优先级 0.6）
+- 项目仓库（优先级 0.7）
 
 **功能：**
 - 帮助搜索引擎发现所有重要页面
@@ -308,22 +307,20 @@ Sitemap: https://bigbanana.tree456.com/sitemap.xml
 
 4. **转化率**
    - 注册用户增加 25%
-   - API Key 购买增加 15%
+   - 配置完成率增加 15%
 
 ---
 
 ## 📞 技术支持
 
 如需进一步的 SEO 优化或有疑问，请联系：
-- 官网：https://tree456.com
-- 产品页：https://bigbanana.tree456.com
+- 项目仓库：https://github.com/shuyu-labs/BigBanana-AI-Director
 
 ---
 
 **优化完成时间**: 2025-12-18  
 **文档版本**: v1.0  
 **下次更新**: 建议每季度更新一次 SEO 策略
-
 
 
 

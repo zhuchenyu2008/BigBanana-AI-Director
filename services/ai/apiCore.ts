@@ -107,7 +107,9 @@ export const resolveRequestModel = (type: 'chat' | 'image' | 'video', modelId?: 
  * 3) runtime fallback key
  */
 export const checkApiKey = (type: 'chat' | 'image' | 'video' = 'chat', modelId?: string): string => {
-  const resolvedModel = resolveModel(type, modelId);
+  // If explicit modelId is legacy/unknown, fall back to active model for this type.
+  // This keeps old projects working after removing built-in defaults.
+  const resolvedModel = resolveModel(type, modelId) || (modelId ? getActiveModel(type) : undefined);
   console.log('[checkApiKey] type/model/resolved:', type, modelId, resolvedModel?.id, resolvedModel?.providerId);
 
   if (resolvedModel) {
@@ -139,7 +141,7 @@ export const checkApiKey = (type: 'chat' | 'image' | 'video' = 'chat', modelId?:
 /** Get API base URL for model/type */
 export const getApiBase = (type: 'chat' | 'image' | 'video' = 'chat', modelId?: string): string => {
   try {
-    const resolvedModel = resolveModel(type, modelId);
+    const resolvedModel = resolveModel(type, modelId) || (modelId ? getActiveModel(type) : undefined);
     if (resolvedModel) {
       return getApiBaseUrlForModel(resolvedModel.id);
     }
@@ -153,9 +155,9 @@ export const getApiBase = (type: 'chat' | 'image' | 'video' = 'chat', modelId?: 
 export const getActiveChatModelName = (): string => {
   try {
     const model = getActiveChatModel();
-    return model?.apiModel || model?.id || 'gpt-5.2';
+    return model?.apiModel || model?.id || '';
   } catch {
-    return 'gpt-5.2';
+    return '';
   }
 };
 
@@ -284,7 +286,7 @@ export const parseHttpError = async (response: Response): Promise<Error> => {
 /** Non-stream chat completion */
 export const chatCompletion = async (
   prompt: string,
-  model: string = 'gpt-5.2',
+  model?: string,
   temperature: number = 0.7,
   maxTokens: number = 8192,
   responseFormat?: 'json_object',
@@ -361,7 +363,7 @@ export const chatCompletion = async (
 /** Streaming chat completion (SSE) */
 export const chatCompletionStream = async (
   prompt: string,
-  model: string = 'gpt-5.2',
+  model?: string,
   temperature: number = 0.7,
   responseFormat: 'json_object' | undefined,
   timeout: number = 600000,

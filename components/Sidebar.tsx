@@ -29,13 +29,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentStage, setStage, onExit, proje
   return (
     <aside className="w-72 bg-[var(--bg-base)] border-r border-[var(--border-primary)] h-screen fixed left-0 top-0 flex flex-col z-50 select-none">
       <div className="p-6 border-b border-[var(--border-subtle)]">
-        <a href="https://tree456.com/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 mb-6 group cursor-pointer">
+        <div className="flex items-center gap-3 mb-6">
           <img src={logoImg} alt="Logo" className="w-8 h-8 flex-shrink-0 transition-transform group-hover:scale-110" />
           <div className="overflow-hidden">
-            <h1 className="text-sm font-bold text-[var(--text-primary)] tracking-wider group-hover:text-[var(--text-secondary)] transition-colors">BigBanana</h1>
-            <p className="text-[10px] text-[var(--text-tertiary)] tracking-widest group-hover:text-[var(--text-secondary)] transition-colors">专业版</p>
+            <h1 className="text-sm font-bold text-[var(--text-primary)] tracking-wider transition-colors">BigBanana</h1>
+            <p className="text-[10px] text-[var(--text-tertiary)] tracking-widest transition-colors">专业版</p>
           </div>
-        </a>
+        </div>
         <button
           onClick={onExit}
           className={`flex items-center gap-2 transition-colors text-xs font-mono uppercase tracking-wide group ${isNavigationLocked ? 'text-[var(--text-muted)] opacity-50 cursor-not-allowed' : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'}`}
