@@ -112,8 +112,14 @@ function EpisodeWorkspace() {
   const saveInFlightRef = useRef(false);
   const queuedSaveEpisodeRef = useRef<ProjectState | null>(null);
   const lastAutoSaveAlertAtRef = useRef(0);
+  const autoSaveBlockedBy413Ref = useRef(false);
 
   const runAutoSave = async (episode: ProjectState): Promise<void> => {
+    if (autoSaveBlockedBy413Ref.current) {
+      setSaveStatus('unsaved');
+      return;
+    }
+
     if (saveInFlightRef.current) {
       queuedSaveEpisodeRef.current = episode;
       return;
@@ -128,18 +134,32 @@ function EpisodeWorkspace() {
     } catch (e) {
       console.error("Auto-save failed", e);
       setSaveStatus('unsaved');
+      const message = e instanceof Error ? e.message : '未知错误';
+      const isPayloadTooLarge = /413/.test(message);
+
+      if (isPayloadTooLarge) {
+        autoSaveBlockedBy413Ref.current = true;
+      }
 
       const now = Date.now();
       if (now - lastAutoSaveAlertAtRef.current > 10000) {
         lastAutoSaveAlertAtRef.current = now;
-        const message = e instanceof Error ? e.message : '未知错误';
-        showAlert(`自动保存失败：${message}\n请稍后重试，避免关闭页面。`, { type: 'error' });
+        if (isPayloadTooLarge) {
+          showAlert(
+            '自动保存失败：当前项目数据体积超过云端接口上限（HTTP 413）。\n' +
+            '已暂停本次会话自动保存，避免重复失败。\n' +
+            '请提高反向代理/配置服务的 body 限制后刷新页面。',
+            { type: 'error' }
+          );
+        } else {
+          showAlert(`自动保存失败：${message}\n请稍后重试，避免关闭页面。`, { type: 'error' });
+        }
       }
     } finally {
       saveInFlightRef.current = false;
       const queued = queuedSaveEpisodeRef.current;
       queuedSaveEpisodeRef.current = null;
-      if (queued && queued !== episode) {
+      if (!autoSaveBlockedBy413Ref.current && queued && queued !== episode) {
         void runAutoSave(queued);
       }
     }
@@ -147,7 +167,8 @@ function EpisodeWorkspace() {
 
   useEffect(() => {
     if (!episodeId) return;
-    loadEpisode(episodeId).then(ep => setCurrentEpisode(ep)).catch(() => navigate('/'));
+    autoSaveBlockedBy413Ref.current = false;
+    loadEpisode(episodeId).then(ep => setCurrentEpisode(clearInFlightGenerationStates(ep))).catch(() => navigate('/'));
     return () => setCurrentEpisode(null);
   }, [episodeId]);
 

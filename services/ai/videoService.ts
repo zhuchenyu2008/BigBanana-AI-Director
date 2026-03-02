@@ -11,7 +11,6 @@ import {
   resolveModel,
   resolveRequestModel,
   parseHttpError,
-  convertVideoUrlToBase64,
   resizeImageToSize,
   getSoraVideoSize,
   getActiveModel,
@@ -26,22 +25,6 @@ const mapVolcengineRatio = (
 ): '16:9' | '9:16' | 'adaptive' => {
   if (hasImageInput) return 'adaptive';
   return aspectRatio === '9:16' ? '9:16' : '16:9';
-};
-
-const tryConvertVideoUrlToBase64 = async (
-  videoUrl: string,
-  label: string
-): Promise<string> => {
-  try {
-    const videoBase64 = await convertVideoUrlToBase64(videoUrl);
-    console.log(`✅ ${label} 视频已转换为base64格式`);
-    return videoBase64;
-  } catch (error: any) {
-    // 浏览器直接请求 TOS 常出现 CORS，保留 URL 继续流程，避免整次生成失败
-    const message = error?.message || String(error);
-    console.warn(`⚠️ ${label} 视频转base64失败，回退为原始URL: ${message}`);
-    return videoUrl;
-  }
 };
 
 // ============================================
@@ -207,7 +190,8 @@ const generateVideoAsync = async (
   console.log(`✅ ${resolvedModelName} 视频生成完成，视频ID:`, videoId);
 
   if (videoUrlFromStatus) {
-    return tryConvertVideoUrlToBase64(videoUrlFromStatus, resolvedModelName);
+    // Keep remote URL to avoid huge base64 payloads in cloud autosave.
+    return videoUrlFromStatus;
   }
 
   // Step 3: 下载视频内容
@@ -245,11 +229,11 @@ const generateVideoAsync = async (
 
       if (contentType && contentType.includes('video')) {
         const videoBlob = await downloadResponse.blob();
-        return new Promise<string>((resolve, reject) => {
+        return await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => {
             const result = reader.result as string;
-            console.log(`✅ ${resolvedModelName} 视频已转换为base64格式`);
+            console.warn(`⚠️ ${resolvedModelName} 未返回可直接访问URL，回退为base64保存（可能导致存储体积较大）`);
             resolve(result);
           };
           reader.onerror = () => reject(new Error('视频转base64失败'));
@@ -263,7 +247,7 @@ const generateVideoAsync = async (
           throw new Error('未获取到视频下载地址');
         }
 
-        return tryConvertVideoUrlToBase64(videoUrl, resolvedModelName);
+        return videoUrl;
       }
     } catch (error: any) {
       if (error.name === 'AbortError') {
@@ -450,7 +434,7 @@ const generateVideoVolcengineTask = async (
       if (!videoUrl) {
         throw new Error('任务已完成，但未返回视频地址');
       }
-      return tryConvertVideoUrlToBase64(videoUrl, 'Volcengine');
+      return videoUrl;
     }
 
     if (failedStates.has(rawStatus)) {
@@ -613,16 +597,7 @@ export const generateVideo = async (
       throw new Error("视频生成失败 (No video URL returned)");
     }
 
-    console.log('🎬 视频URL获取成功,正在转换为base64...');
-
-    try {
-      const videoBase64 = await convertVideoUrlToBase64(videoUrl);
-      console.log('✅ 视频已转换为base64格式,可安全存储到IndexedDB');
-      return videoBase64;
-    } catch (error: any) {
-      console.error('❌ 视频转base64失败,返回原始URL:', error);
-      return videoUrl;
-    }
+    return videoUrl;
   } catch (error: any) {
     clearTimeout(timeoutId);
     if (error.name === 'AbortError') {
