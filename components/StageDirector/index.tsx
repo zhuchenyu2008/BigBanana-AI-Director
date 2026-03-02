@@ -137,6 +137,31 @@ const StageDirector: React.FC<Props> = ({ project, updateProject, onApiKeyError,
       .join(', ');
   };
 
+  const stripAudioSensitiveTerms = (input: string): { text: string; changed: boolean } => {
+    const original = String(input || '');
+    if (!original.trim()) return { text: original, changed: false };
+
+    // Some video gateways may reject prompts with explicit audio/music instructions.
+    const audioPatterns: RegExp[] = [
+      /背景音乐|配乐|音效|声音设计|声音效果|歌曲|歌声|吟唱|旁白|配音|对白|台词|人声|口播|解说/gi,
+      /\b(audio|sound effect|soundscape|sfx|music|background music|soundtrack|song|singing|lyrics|voiceover|narration|dialogue)\b/gi,
+    ];
+
+    let result = original;
+    audioPatterns.forEach((pattern) => {
+      result = result.replace(pattern, ' ');
+    });
+
+    result = result
+      .replace(/[ \t]{2,}/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/[，,]\s*[，,]+/g, '，')
+      .replace(/^\s*[，,;；]\s*|\s*[，,;；]\s*$/g, '')
+      .trim();
+
+    return { text: result, changed: result !== original };
+  };
+
   const formatUserFriendlyError = (error: any, fallback: string): string => {
     if (!error) return fallback;
 
@@ -156,6 +181,13 @@ const StageDirector: React.FC<Props> = ({ project, updateProject, onApiKeyError,
 
     if (!import.meta.env.DEV) {
       normalizedMessage = normalizedMessage.replace(/（接口信息：.*?）/g, '');
+    }
+
+    if (/PUBLIC_ERROR_AUDIO_FILTERED/i.test(normalizedMessage)) {
+      return '视频生成被平台安全策略拦截（音频相关风控）。请移除提示词中的音乐/歌声/歌词/旁白等声音描述后重试。';
+    }
+    if (/RESOURCE_EXHAUSTED/i.test(normalizedMessage) || /quota/i.test(normalizedMessage)) {
+      return '视频生成额度已耗尽或触发限流（RESOURCE_EXHAUSTED）。请稍后重试，或更换可用视频模型/API Key。';
     }
 
     return normalizedMessage || fallback;
@@ -219,42 +251,6 @@ const StageDirector: React.FC<Props> = ({ project, updateProject, onApiKeyError,
   
   const allStartFramesGenerated = project.shots.length > 0 && 
     project.shots.every(s => s.keyframes?.find(k => k.type === 'start')?.imageUrl);
-
-  /**
-   * 组件加载时，检测并重置卡住的生成状态
-   * 解决关闭系统后重新打开时，状态仍为"generating"导致无法重新生成的问题
-   */
-  useEffect(() => {
-    const hasStuckGenerating = project.shots.some(shot => {
-      const stuckKeyframes = shot.keyframes?.some(kf => kf.status === 'generating');
-      const stuckVideo = shot.interval?.status === 'generating';
-      const stuckNineGrid = shot.nineGrid?.status === 'generating_panels' || shot.nineGrid?.status === 'generating_image' || (shot.nineGrid?.status as string) === 'generating';
-      return stuckKeyframes || stuckVideo || stuckNineGrid;
-    });
-
-    if (hasStuckGenerating) {
-      console.log('🔧 检测到卡住的生成状态，正在重置...');
-      updateProject((prevProject: ProjectState) => ({
-        ...prevProject,
-        shots: prevProject.shots.map(shot =>
-          applyShotQuality({
-            ...shot,
-            keyframes: shot.keyframes?.map(kf => 
-              kf.status === 'generating'
-                ? { ...kf, status: 'failed' as const }
-                : kf
-            ),
-            interval: shot.interval && shot.interval.status === 'generating'
-              ? { ...shot.interval, status: 'failed' as const }
-              : shot.interval,
-            nineGrid: shot.nineGrid && (shot.nineGrid.status === 'generating_panels' || shot.nineGrid.status === 'generating_image' || (shot.nineGrid.status as string) === 'generating')
-              ? { ...shot.nineGrid, status: 'failed' as const }
-              : shot.nineGrid
-          }, prevProject.scriptData)
-        )
-      }));
-    }
-  }, []); // 进入导演页时执行一次，清理离开页面后遗留的 generating 状态
 
   /**
    * 上报生成状态给父组件，用于导航锁定
@@ -565,28 +561,39 @@ const StageDirector: React.FC<Props> = ({ project, updateProject, onApiKeyError,
     const selectedModel = selectedModelRouting.normalizedModelId;
     // 规范化模型名称：旧模型名 -> 现行可用模型
 
-    // 必须有起始帧
-    if (!sKf?.imageUrl) {
-      return showAlert("请先生成起始帧！", { type: 'warning' });
-    }
-    
     const projectLanguage = project.language || project.scriptData?.language || '中文';
     const visualStyle = project.visualStyle || project.scriptData?.visualStyle || 'live-action';
     
     const videoInputMode = shot.videoInputMode || getRecommendedVideoInputMode(selectedModel);
-    // 检测是否为网格分镜模式：必须显式选择网格模式 + 首帧使用整张网格图
-    const isNineGridMode = (
-      videoInputMode === 'storyboard-grid' &&
-      shot.nineGrid?.status === 'completed' &&
-      shot.nineGrid?.imageUrl &&
-      sKf?.imageUrl === shot.nineGrid.imageUrl
-    );
+    const isStoryboardGridMode = videoInputMode === 'storyboard-grid';
+    const hasCompletedNineGrid = shot.nineGrid?.status === 'completed' && !!shot.nineGrid?.imageUrl;
+
+    if (isStoryboardGridMode && !hasCompletedNineGrid) {
+      return showAlert('当前已选择网格分镜模式，请先生成并确认网格分镜图片。', { type: 'warning' });
+    }
+
+    // 网格分镜模式：强制使用整张网格图作为首图输入，不再依赖单帧首帧
+    const effectiveStartImage = isStoryboardGridMode
+      ? shot.nineGrid?.imageUrl
+      : sKf?.imageUrl;
+
+    // 非网格模式必须有起始帧
+    if (!effectiveStartImage) {
+      return showAlert('请先生成起始帧！', { type: 'warning' });
+    }
+
+    const isNineGridMode = isStoryboardGridMode && hasCompletedNineGrid;
     
     const routedFrames = routeVideoFrameInputs(
       selectedModel,
-      sKf?.imageUrl,
+      effectiveStartImage,
       eKf?.imageUrl,
       videoInputMode
+    );
+    console.log(
+      `[VideoInput] shot=${shot.id} mode=${videoInputMode} ` +
+      `startSource=${isNineGridMode ? 'nine-grid' : 'keyframe'} ` +
+      `hasStart=${!!routedFrames.startImage} hasEnd=${!!routedFrames.endImage}`
     );
     const routedEndKeyframeId = routedFrames.endImage ? (eKf?.id || '') : '';
 
@@ -604,7 +611,8 @@ const StageDirector: React.FC<Props> = ({ project, updateProject, onApiKeyError,
     }
 
     let videoPrompt = (shot.interval?.videoPrompt || '').trim();
-    if (!videoPrompt) {
+    // 网格分镜模式下始终按九宫格模板重建提示词，避免沿用旧的普通模式提示词。
+    if (!videoPrompt || isNineGridMode) {
       videoPrompt = buildVideoPrompt(
         shot.actionSummary,
         shot.cameraMovement,
@@ -619,6 +627,12 @@ const StageDirector: React.FC<Props> = ({ project, updateProject, onApiKeyError,
         },
         promptTemplates
       );
+    }
+
+    const safetyNormalizedPrompt = stripAudioSensitiveTerms(videoPrompt);
+    if (safetyNormalizedPrompt.changed) {
+      videoPrompt = safetyNormalizedPrompt.text;
+      setToastMessage('已自动移除提示词中的音频/配乐描述，以降低平台风控拦截概率。');
     }
 
     const videoPromptLength = Array.from(videoPrompt).length;
@@ -641,7 +655,7 @@ const StageDirector: React.FC<Props> = ({ project, updateProject, onApiKeyError,
     const selectedModelConfig = (getModelById(selectedModelInput) || getModelById(selectedModel)) as any;
     const preflightResult = runVideoPreflight({
       prompt: videoPrompt,
-      hasStartFrame: !!sKf?.imageUrl,
+      hasStartFrame: !!routedFrames.startImage,
       hasEndFrame: !!routedFrames.endImage,
       modelId: selectedModel,
       supportsEndFrame: selectedModelRouting.supportsEndFrame,
@@ -1308,6 +1322,11 @@ const StageDirector: React.FC<Props> = ({ project, updateProject, onApiKeyError,
     try {
       // 2. 基于最新 shot 快照收集参考图片，避免重试时引用过期闭包数据
       const refResult = getRefImagesForShot(shot, project.scriptData);
+      console.log(
+        `[NineGrid] shot=${shotId} refs total=${refResult.breakdown.total} ` +
+        `(scene=${refResult.breakdown.scene}, character=${refResult.breakdown.character}, ` +
+        `turnaround=${refResult.breakdown.characterTurnaround}, prop=${refResult.breakdown.prop})`
+      );
       if (refResult.images.length === 0) {
         console.warn(`[NineGrid] shot=${shotId} 没有可用参考图，将仅按文案生成。`);
       }

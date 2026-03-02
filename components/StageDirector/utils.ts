@@ -30,6 +30,13 @@ const KEYFRAME_META_SPLITTER = '\n\n---PROMPT_META_START---';
 export interface RefImagesResult {
   images: string[];
   hasTurnaround: boolean;
+  breakdown: {
+    scene: number;
+    character: number;
+    characterTurnaround: number;
+    prop: number;
+    total: number;
+  };
 }
 
 export type VideoModelFamily = 'sora' | 'doubao-task' | 'veo-fast' | 'unknown';
@@ -51,7 +58,9 @@ const normalizeVideoModelIdForRouting = (videoModel: string): string => {
   const raw = (videoModel || '').trim();
   if (!raw) return 'sora-2';
 
-  const normalized = raw.toLowerCase();
+  // Provider-qualified ids like "provider_xxx:veo_3_1-fast-4K" should route by the real model id.
+  const modelPart = raw.includes(':') ? raw.slice(raw.lastIndexOf(':') + 1) : raw;
+  const normalized = modelPart.toLowerCase();
 
   if (normalized === 'veo_3_1-fast-4k') {
     return 'veo_3_1-fast';
@@ -66,7 +75,7 @@ const normalizeVideoModelIdForRouting = (videoModel: string): string => {
     return 'veo_3_1-fast';
   }
 
-  return raw;
+  return modelPart;
 };
 
 export const resolveVideoModelRouting = (videoModel: string): VideoModelRouting => {
@@ -149,13 +158,21 @@ export const routeVideoFrameInputs = (
 export const getRefImagesForShot = (shot: Shot, scriptData: ProjectState['scriptData']): RefImagesResult => {
   const referenceImages: string[] = [];
   let hasTurnaround = false;
+  const breakdown = {
+    scene: 0,
+    character: 0,
+    characterTurnaround: 0,
+    prop: 0,
+    total: 0,
+  };
   
-  if (!scriptData) return { images: referenceImages, hasTurnaround };
+  if (!scriptData) return { images: referenceImages, hasTurnaround, breakdown };
   
   // 1. 场景参考图（环境/氛围） - 优先级最高
   const scene = scriptData.scenes.find(s => String(s.id) === String(shot.sceneId));
   if (scene?.referenceImage) {
     referenceImages.push(scene.referenceImage);
+    breakdown.scene += 1;
   }
 
   // 2. 角色参考图（外观）
@@ -170,6 +187,7 @@ export const getRefImagesForShot = (shot: Shot, scriptData: ProjectState['script
         const variation = char.variations?.find(v => v.id === varId);
         if (variation?.referenceImage) {
           referenceImages.push(variation.referenceImage);
+          breakdown.character += 1;
           return; // 使用变体图片而不是基础图片
         }
       }
@@ -177,11 +195,13 @@ export const getRefImagesForShot = (shot: Shot, scriptData: ProjectState['script
       // 基础参考图
       if (char.referenceImage) {
         referenceImages.push(char.referenceImage);
+        breakdown.character += 1;
       }
 
       // 如果角色有已完成的九宫格造型图，追加为额外参考
       if (char.turnaround?.status === 'completed' && char.turnaround.imageUrl) {
         referenceImages.push(char.turnaround.imageUrl);
+        breakdown.characterTurnaround += 1;
         hasTurnaround = true;
       }
     });
@@ -193,11 +213,13 @@ export const getRefImagesForShot = (shot: Shot, scriptData: ProjectState['script
       const prop = scriptData.props.find(p => String(p.id) === String(propId));
       if (prop?.referenceImage) {
         referenceImages.push(prop.referenceImage);
+        breakdown.prop += 1;
       }
     });
   }
-  
-  return { images: referenceImages, hasTurnaround };
+
+  breakdown.total = referenceImages.length;
+  return { images: referenceImages, hasTurnaround, breakdown };
 };
 
 /**

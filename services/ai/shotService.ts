@@ -810,6 +810,10 @@ export const generateNineGridImage = async (
     )
   );
   console.log(`🎬 ${layout.label}分镜 - 开始生成网格图片...`);
+  console.log(
+    `🧷 ${layout.label}分镜 - 参考图输入: ${referenceImages.length} 张` +
+    `${options?.hasTurnaround ? '（包含角色九宫格参考）' : ''}`
+  );
 
   const stylePrompt = getStylePrompt(visualStyle);
 
