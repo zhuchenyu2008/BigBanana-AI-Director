@@ -108,38 +108,48 @@ const Sidebar: React.FC<SidebarProps> = ({ currentStage, setStage, onExit, proje
             <HelpCircle className="w-4 h-4" />
           </button>
         )}
-        <a
-          href={USER_MANUAL_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="w-full flex items-center justify-between text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-        >
-          <span className="font-mono text-[10px] uppercase tracking-widest">使用手册</span>
-          <BookOpen className="w-4 h-4" />
-        </a>
+        {USER_MANUAL_URL && (
+          <a
+            href={USER_MANUAL_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="w-full flex items-center justify-between text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+          >
+            <span className="font-mono text-[10px] uppercase tracking-widest">使用手册</span>
+            <BookOpen className="w-4 h-4" />
+          </a>
+        )}
         {onShowModelConfig && (
           <button onClick={onShowModelConfig} className="w-full flex items-center justify-between text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer transition-colors">
             <span className="font-mono text-[10px] uppercase tracking-widest">模型配置</span>
             <Cpu className="w-4 h-4" />
           </button>
         )}
-        <div className="flex gap-3 pt-2">
-          <a href={OFFICIAL_WEBSITE_URL} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-[var(--text-muted)] hover:text-[var(--accent-text)] transition-colors"
-            title="树语智能官网"
-          >
-            <Globe className="w-3.5 h-3.5" />
-            <span className="font-mono text-[10px] tracking-wide">官网</span>
-          </a>
-          <span className="text-[var(--border-secondary)]">|</span>
-          <a href={CREATIVE_HOME_URL} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-[var(--text-muted)] hover:text-[var(--accent-text)] transition-colors"
-            title="BigBanana 创作主页"
-          >
-            <Palette className="w-3.5 h-3.5" />
-            <span className="font-mono text-[10px] tracking-wide">创作主页</span>
-          </a>
-        </div>
+        {(OFFICIAL_WEBSITE_URL || CREATIVE_HOME_URL) && (
+          <div className="flex gap-3 pt-2">
+            {OFFICIAL_WEBSITE_URL && (
+              <a href={OFFICIAL_WEBSITE_URL} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-[var(--text-muted)] hover:text-[var(--accent-text)] transition-colors"
+                title="官网"
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span className="font-mono text-[10px] tracking-wide">官网</span>
+              </a>
+            )}
+            {OFFICIAL_WEBSITE_URL && CREATIVE_HOME_URL && (
+              <span className="text-[var(--border-secondary)]">|</span>
+            )}
+            {CREATIVE_HOME_URL && (
+              <a href={CREATIVE_HOME_URL} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-[var(--text-muted)] hover:text-[var(--accent-text)] transition-colors"
+                title="创作主页"
+              >
+                <Palette className="w-3.5 h-3.5" />
+                <span className="font-mono text-[10px] tracking-wide">创作主页</span>
+              </a>
+            )}
+          </div>
+        )}
         <div className="text-[9px] text-[var(--text-muted)] font-mono tracking-wide opacity-60 pt-1">
           {COPYRIGHT_TEXT}
         </div>

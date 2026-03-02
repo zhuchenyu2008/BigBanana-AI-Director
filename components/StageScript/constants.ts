@@ -3,7 +3,7 @@
  */
 
 export const DURATION_OPTIONS = [
-  { label: '30秒 (广告)', value: '30s' },
+  { label: '30秒 (短内容)', value: '30s' },
   { label: '60秒 (预告)', value: '60s' },
   { label: '2分钟 (片花)', value: '120s' },
   { label: '5分钟 (短片)', value: '300s' },

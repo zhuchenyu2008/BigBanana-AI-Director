@@ -81,8 +81,15 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
       server: {
-        port: 3000,
+        port: 13000,
         host: '0.0.0.0',
+        allowedHosts: ['ai-video.zhuchenyu.cn'],
+        proxy: {
+          '/api/config': {
+            target: env.CONFIG_API_TARGET || 'http://localhost:8788',
+            changeOrigin: true,
+          },
+        },
       },
       plugins: [react(), createDevMediaProxyPlugin()],
       define: {

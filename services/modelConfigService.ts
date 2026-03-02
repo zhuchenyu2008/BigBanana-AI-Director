@@ -26,7 +26,7 @@ import {
   getProviders as getRegistryProviders,
   addProvider as addRegistryProvider,
   updateProvider as updateRegistryProvider,
-  deleteProvider as deleteRegistryProvider,
+  removeProvider as deleteRegistryProvider,
   getModels as getRegistryModels,
   getModelById,
   setActiveModel,

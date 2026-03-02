@@ -58,39 +58,37 @@ const dedupeById = <T extends { id: string }>(items: T[]): T[] => {
 };
 
 const normalizeRegistryState = (raw: any): ModelRegistryState => {
-  const providers = dedupeById(
-    (Array.isArray(raw?.providers) ? raw.providers : []).map((provider: any) => ({
-      id: (provider?.id || '').trim(),
-      name: (provider?.name || provider?.id || '').trim(),
-      baseUrl: (provider?.baseUrl || '').trim().replace(/\/+$/, ''),
-      apiKey: provider?.apiKey?.trim() || undefined,
-      isBuiltIn: Boolean(provider?.isBuiltIn),
-      isDefault: Boolean(provider?.isDefault),
-    }))
-  );
+  const providerCandidates: ModelProvider[] = (Array.isArray(raw?.providers) ? raw.providers : []).map((provider: any) => ({
+    id: (provider?.id || '').trim(),
+    name: (provider?.name || provider?.id || '').trim(),
+    baseUrl: (provider?.baseUrl || '').trim().replace(/\/+$/, ''),
+    apiKey: provider?.apiKey?.trim() || undefined,
+    isBuiltIn: Boolean(provider?.isBuiltIn),
+    isDefault: Boolean(provider?.isDefault),
+  }));
+  const providers = dedupeById<ModelProvider>(providerCandidates);
 
   const providerIds = new Set(providers.map((provider) => provider.id));
 
-  const models = dedupeById(
-    (Array.isArray(raw?.models) ? raw.models : [])
-      .map((model: any) => {
-        const id = (model?.id || '').trim();
-        const apiModel = (model?.apiModel || '').trim() || id;
-        return {
-          ...model,
-          id,
-          apiModel,
-          name: (model?.name || id).trim(),
-          providerId: (model?.providerId || '').trim(),
-          endpoint: model?.endpoint?.trim() || undefined,
-          description: model?.description?.trim() || undefined,
-          apiKey: model?.apiKey?.trim() || undefined,
-          isBuiltIn: Boolean(model?.isBuiltIn),
-          isEnabled: model?.isEnabled !== false,
-        } as ModelDefinition;
-      })
-      .filter((model: ModelDefinition) => providerIds.has(model.providerId))
-  );
+  const modelCandidates: ModelDefinition[] = (Array.isArray(raw?.models) ? raw.models : [])
+    .map((model: any) => {
+      const id = (model?.id || '').trim();
+      const apiModel = (model?.apiModel || '').trim() || id;
+      return {
+        ...model,
+        id,
+        apiModel,
+        name: (model?.name || id).trim(),
+        providerId: (model?.providerId || '').trim(),
+        endpoint: model?.endpoint?.trim() || undefined,
+        description: model?.description?.trim() || undefined,
+        apiKey: model?.apiKey?.trim() || undefined,
+        isBuiltIn: Boolean(model?.isBuiltIn),
+        isEnabled: model?.isEnabled !== false,
+      } as ModelDefinition;
+    })
+    .filter((model) => providerIds.has(model.providerId));
+  const models = dedupeById<ModelDefinition>(modelCandidates);
 
   const enabledModelByType: Record<ModelType, string> = {
     chat: models.find((model) => model.type === 'chat' && model.isEnabled)?.id || '',
@@ -162,10 +160,8 @@ export const initModelRegistry = async (): Promise<ModelRegistryState> => {
       registryState = normalizedState;
       return normalizedState;
     } catch (error) {
-      console.warn('初始化模型注册中心失败，使用空配置:', error);
-      const fallbackState = getDefaultState();
-      registryState = fallbackState;
-      return fallbackState;
+      console.error('初始化模型注册中心失败，云端配置不可用:', error);
+      throw new Error('Cloud config service is unavailable. Please start config-api and retry.');
     }
   })();
 
@@ -174,7 +170,7 @@ export const initModelRegistry = async (): Promise<ModelRegistryState> => {
 
 export const loadRegistry = (): ModelRegistryState => {
   if (!registryState) {
-    registryState = getDefaultState();
+    throw new Error('Model registry is not initialized. Call initModelRegistry() first.');
   }
   return registryState;
 };

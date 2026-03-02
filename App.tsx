@@ -109,6 +109,41 @@ function EpisodeWorkspace() {
   const [showModelConfig, setShowModelConfig] = useState(false);
   const saveTimeoutRef = useRef<any>(null);
   const hideStatusTimeoutRef = useRef<any>(null);
+  const saveInFlightRef = useRef(false);
+  const queuedSaveEpisodeRef = useRef<ProjectState | null>(null);
+  const lastAutoSaveAlertAtRef = useRef(0);
+
+  const runAutoSave = async (episode: ProjectState): Promise<void> => {
+    if (saveInFlightRef.current) {
+      queuedSaveEpisodeRef.current = episode;
+      return;
+    }
+
+    saveInFlightRef.current = true;
+    setSaveStatus('saving');
+
+    try {
+      await saveEpisode(episode);
+      setSaveStatus('saved');
+    } catch (e) {
+      console.error("Auto-save failed", e);
+      setSaveStatus('unsaved');
+
+      const now = Date.now();
+      if (now - lastAutoSaveAlertAtRef.current > 10000) {
+        lastAutoSaveAlertAtRef.current = now;
+        const message = e instanceof Error ? e.message : '未知错误';
+        showAlert(`自动保存失败：${message}\n请稍后重试，避免关闭页面。`, { type: 'error' });
+      }
+    } finally {
+      saveInFlightRef.current = false;
+      const queued = queuedSaveEpisodeRef.current;
+      queuedSaveEpisodeRef.current = null;
+      if (queued && queued !== episode) {
+        void runAutoSave(queued);
+      }
+    }
+  };
 
   useEffect(() => {
     if (!episodeId) return;
@@ -136,14 +171,8 @@ function EpisodeWorkspace() {
     setShowSaveStatus(true);
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
-      setSaveStatus('saving');
-      try {
-        await saveEpisode(currentEpisode);
-        setSaveStatus('saved');
-      } catch (e) {
-        console.error("Auto-save failed", e);
-      }
-    }, 1000);
+      void runAutoSave(currentEpisode);
+    }, 2500);
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
   }, [currentEpisode]);
 
@@ -177,6 +206,19 @@ function EpisodeWorkspace() {
 
     updateSeriesProject({ title: candidateTitle });
   }, [project, currentEpisode, updateSeriesProject]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const customEvent = event as CustomEvent<{ message?: string }>;
+      const message = customEvent.detail?.message || '参考图输入不可用，已自动降级生成。';
+      showAlert(message, { type: 'warning' });
+    };
+
+    window.addEventListener('bb-inline-reference-fallback', handler as EventListener);
+    return () => {
+      window.removeEventListener('bb-inline-reference-fallback', handler as EventListener);
+    };
+  }, [showAlert]);
 
   const handleUpdateProject = (updates: Partial<ProjectState> | ((prev: ProjectState) => ProjectState)) => {
     updateEpisode(updates);
