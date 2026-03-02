@@ -572,33 +572,49 @@ const StageDirector: React.FC<Props> = ({ project, updateProject, onApiKeyError,
       return showAlert('当前已选择网格分镜模式，请先生成并确认网格分镜图片。', { type: 'warning' });
     }
 
-    // 网格分镜模式：强制使用整张网格图作为首图输入，不再依赖单帧首帧
-    const effectiveStartImage = isStoryboardGridMode
-      ? shot.nineGrid?.imageUrl
-      : sKf?.imageUrl;
+    // 网格分镜模式：首图使用关键帧；九宫格整图作为额外参考图（第二参考）。
+    const useNineGridAsAuxReference =
+      isStoryboardGridMode &&
+      hasCompletedNineGrid &&
+      selectedModelRouting.supportsEndFrame &&
+      !!shot.nineGrid?.imageUrl;
 
-    // 非网格模式必须有起始帧
+    const effectiveStartImage = sKf?.imageUrl;
+    const effectiveSecondReferenceImage = useNineGridAsAuxReference
+      ? shot.nineGrid?.imageUrl
+      : eKf?.imageUrl;
+
+    // 所有模式都要求有起始帧；网格模式下建议从九宫格裁剪一格作为起始帧。
     if (!effectiveStartImage) {
-      return showAlert('请先生成起始帧！', { type: 'warning' });
+      return showAlert(
+        isStoryboardGridMode
+          ? '网格分镜模式下请先准备起始帧（建议先从九宫格选择一个面板作为首帧）。'
+          : '请先生成起始帧！',
+        { type: 'warning' }
+      );
     }
 
     const isNineGridMode = isStoryboardGridMode && hasCompletedNineGrid;
     
+    const frameRoutingMode = useNineGridAsAuxReference ? 'keyframes' : videoInputMode;
     const routedFrames = routeVideoFrameInputs(
       selectedModel,
       effectiveStartImage,
-      eKf?.imageUrl,
-      videoInputMode
+      effectiveSecondReferenceImage,
+      frameRoutingMode
     );
     console.log(
       `[VideoInput] shot=${shot.id} mode=${videoInputMode} ` +
-      `startSource=${isNineGridMode ? 'nine-grid' : 'keyframe'} ` +
+      `startSource=keyframe auxRef=${useNineGridAsAuxReference ? 'nine-grid' : (eKf?.imageUrl ? 'end-keyframe' : 'none')} ` +
       `hasStart=${!!routedFrames.startImage} hasEnd=${!!routedFrames.endImage}`
     );
-    const routedEndKeyframeId = routedFrames.endImage ? (eKf?.id || '') : '';
+    const routedEndKeyframeId =
+      routedFrames.endImage && !useNineGridAsAuxReference
+        ? (eKf?.id || '')
+        : '';
 
     if (routedFrames.ignoredEndFrame) {
-      if (videoInputMode === 'storyboard-grid' && !!eKf?.imageUrl) {
+      if (videoInputMode === 'storyboard-grid' && (useNineGridAsAuxReference || !!eKf?.imageUrl)) {
         setToastMessage('网格分镜模式已启用：视频生成将只使用首帧，尾帧输入已自动忽略。');
       } else {
         const modelName = selectedModelRouting.family === 'sora'
