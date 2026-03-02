@@ -386,7 +386,7 @@ export const BUILTIN_VIDEO_MODELS: VideoModelDefinition[] = [
     type: 'video',
     providerId: 'antsk',
     endpoint: '/v1/videos',
-    description: '异步模式，支持横屏/竖屏、支持单图和首尾帧，固定 8 秒时长,价格便宜速度快',
+    description: '异步模式，支持横屏/竖屏、支持单图和首尾帧，固定 8 秒时长',
     isBuiltIn: true,
     isEnabled: true,
     params: { ...DEFAULT_VIDEO_PARAMS_VEO_FAST },
@@ -434,7 +434,7 @@ export const BUILTIN_VIDEO_MODELS: VideoModelDefinition[] = [
 export const BUILTIN_PROVIDERS: ModelProvider[] = [
   {
     id: 'antsk',
-    name: 'BigBanana API (api.antsk.cn)',
+    name: 'Default OpenAI-Compatible API',
     baseUrl: 'https://api.antsk.cn',
     isBuiltIn: true,
     isDefault: true,

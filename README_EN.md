@@ -9,7 +9,7 @@
 
 **BigBanana AI Director** is an **AI-powered, one-stop platform** for **short dramas** and **motion comics**, built for creators who want to go from idea to final video fast.
 
-Moving away from the traditional "slot machine" style of random generation, BigBanana adopts an industrial **"Script-to-Asset-to-Keyframe"** workflow. With deep integration of AntSK API’s advanced AI models, it enables **one-sentence to complete drama** — fully automated from **script** to **final video**, while maintaining precise control over character consistency, scene continuity, and camera movement.
+Moving away from the traditional "slot machine" style of random generation, BigBanana adopts an industrial **"Script-to-Asset-to-Keyframe"** workflow. With configurable multi-model integration, it enables **one-sentence to complete drama** — fully automated from **script** to **final video**, while maintaining precise control over character consistency, scene continuity, and camera movement.
 ## UI Showcase
 
 ### Project Management
@@ -86,75 +86,6 @@ Traditional Text-to-Video models often struggle with specific camera movements a
     *   **Video**: `veo-3.1-fast-generate-preview`
 *   **Storage**: IndexedDB (Local browser database, privacy-focused, no backend dependency)
 
-## Why Choose AntSK API?
-
-This project deeply integrates [**AntSK API Platform**](https://api.antsk.cn/), delivering exceptional value for creators:
-
-### 🎯 Full Model Coverage
-* **Text Models**: GPT-5.2, GPT-5.1, Claude 3.5 Sonnet
-* **Vision Models**: Gemini 3 Pro, Nano Banana Pro
-* **Video Models**: Sora-2, Veo-3.1 (with keyframe interpolation)
-* **Unified Access**: Single API for all models, no platform switching
-
-### 💰 Unbeatable Pricing
-* **Under 20% of Official Prices**: Save 80%+ on all models
-* **Pay-As-You-Go**: No minimum spend, pay only for what you use
-* **Enterprise-Grade Reliability**: 99.9% SLA, 24/7 technical support
-
-### 🚀 Developer-Friendly
-* **OpenAI-Compatible**: Zero migration cost for existing code
-* **Comprehensive Docs**: Full API documentation and code examples
-* **Real-Time Monitoring**: Visual usage stats and cost tracking
-
-[**Sign Up for Free Credits**](https://api.antsk.cn/) →
-
-## ⚠️ Open-Source & “Free” Clarification (Please Read)
-
-* **Model usage note**: This open-source project’s default workflow requires a capability-matched model stack, for example an LLM (such as **GPT-5.2**), an image model (such as **Nano Banana Pro**), and a video model (such as **Sora-2** / **Veo-3.1**). If you want to connect other providers or models, you can modify and adapt it yourself.
-* **Why we open-sourced this**: Our goal is to lower the barrier to entry and make creation more accessible. The project code is open-source, and model configuration is replaceable.
-* **About our API service**: The API we provide is mainly for quick experience and integration, not as a core profit source.
-* **Freedom of choice**: If our API does not meet your expectations, you can absolutely use official OpenAI or Google services directly (even at a higher price). That is a normal and respected choice.
-* **About “always free” expectations**: If your primary criterion is long-term “must be free,” this project may not be the best fit for you.
-
----
-
-## 💬 Join Our Community
-
-Scan the QR code to join our **BigBanana Product Experience Group** on WeChat. Connect with fellow creators, share tips, and get the latest updates:
-
-<div align="center">
-<img src="./images/qrcode.jpg" width="300" alt="WeChat Group QR Code">
-<p><i>Scan to join WeChat group</i></p>
-</div>
-
----
-
-### 🎨 Lightweight Creation Tools
-
-For **quick one-off creative tasks**, try our online tool platform:
-
-**[BigBanana Creation Studio](https://bigbanana.tree456.com/)** offers:
-* 📷 **[AI Image Generation](https://bigbanana.tree456.com/gemini-image.html)**: Text-to-image with multiple styles
-* 📊 **[AI PowerPoint](https://bigbanana.tree456.com/ppt-content.html)**: Generate presentations instantly
-* 🎬 **[AI Video](https://bigbanana.tree456.com/ai-video-content.html)**: Intelligent video content generation
-* 📱 **[Social Media Content](https://bigbanana.tree456.com/redink-content.html)**: Viral titles and posts for Xiaohongshu
-* 📖 **[AI Novel Creation](https://bigbanana.tree456.com/novel-creation.html)**: Intelligent novel generation and continuation
-* 🎨 **[AI Anime Generation](https://bigbanana.tree456.com/anime-content.html)**: Anime-style image creation
-* 🎭 **No Installation**: Use directly in browser, instant access
-
-**Best For**: Daily creation, rapid prototyping, idea validation  
-**This Project Is For**: Systematic drama production, batch video generation, industrial workflows
-
-## Client Download
-
-Download the installer and get started right away — no development environment needed:
-
-**[📥 Download BigBanana AI Director Client (Windows)](https://tree456.oss-cn-beijing.aliyuncs.com/BigBanana%20AI%20Director%20Setup%201.0.0.exe?Expires=1770908400&OSSAccessKeyId=TMP.3KofXPaUNdnvbUpRP5MqiRmMMxuGwiftTgQfn7U3ntRtFvMYHpMB2kPb17r7rPXksvo7DFncrz4dWSfs3K33wVgGXfnCy4&Signature=wiOZbN%2BcZNuyZdiEI3KR1CqkFhM%3D)**
-
-> 💡 Just download and install — supports Windows.
-
----
-
 ## Getting Started
 
 ### Option 1: Local Development
@@ -171,7 +102,7 @@ npm install
 npm run dev
 
 # 4. Open in browser
-# Visit http://localhost:3000
+# Visit http://localhost:13000
 ```
 
 ### Option 2: Docker Deployment (Recommended)
@@ -185,7 +116,7 @@ cd BigBanana-AI-Director
 docker-compose up -d --build
 
 # 3. Open in browser
-# Visit http://localhost:3005
+# Visit http://localhost:13000
 
 # View logs
 docker-compose logs -f
@@ -205,10 +136,10 @@ cd BigBanana-AI-Director
 docker build -t bigbanana-ai .
 
 # 3. Run container
-docker run -d -p 3005:80 --name bigbanana-ai-app bigbanana-ai
+docker run -d -p 13000:80 --name bigbanana-ai-app bigbanana-ai
 
 # 4. Open in browser
-# Visit http://localhost:3005
+# Visit http://localhost:13000
 
 # View logs
 docker logs -f bigbanana-ai-app
@@ -235,7 +166,7 @@ docker-compose up -d --force-recreate
 
 ## Quick Start
 
-1.  **Configure Key**: Launch the app and input your AntSK API Key. [**Buy API Key**](https://api.antsk.cn)
+1.  **Configure Key**: Launch the app and input your API Key in model settings.
 2.  **Input Story**: In Phase 01, enter your story idea and click "Generate Script".
 3.  **Art Direction**: Go to Phase 02, generate character sheets and scene concepts.
 4.  **Shot Production**: In Phase 03, generate the Start Frame first; for tighter control, add an End Frame or use the Nine-Grid preview to choose Start Frame composition.
@@ -257,9 +188,7 @@ This project is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/lic
 
 - ✅ Personal learning and non-commercial use allowed
 - ✅ Modification and derivative works allowed (under the same license)
-- ❌ Commercial use prohibited (requires commercial license)
-
-For commercial licensing, please contact: antskpro@qq.com
+- ❌ Commercial use prohibited
 
 ---
-*Built for Creators, by BigBanana.*
+*Built for creators.*

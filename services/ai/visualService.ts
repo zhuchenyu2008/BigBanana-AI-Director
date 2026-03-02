@@ -441,6 +441,19 @@ Output ONLY the visual prompt text, no explanations.`;
  * 使用图像生成API，支持参考图像确保角色和场景一致性
  */
 type ReferencePackType = 'shot' | 'character' | 'scene' | 'prop' | 'shape';
+
+let hasNotifiedInlineReferenceFallback = false;
+
+const notifyInlineReferenceFallback = () => {
+  if (hasNotifiedInlineReferenceFallback) return;
+  hasNotifiedInlineReferenceFallback = true;
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('bb-inline-reference-fallback', {
+    detail: {
+      message: '当前网关不支持参考图输入（inlineData），本次已自动降级为无参考图生成，人物/场景一致性会明显下降。',
+    },
+  }));
+};
 type ImageModelRoutingFamily = 'nano-banana' | 'generic';
 
 const resolveImageModelRoutingFamily = (model: any): ImageModelRoutingFamily => {
@@ -1178,6 +1191,7 @@ NEGATIVE PROMPT (strictly avoid): ${compactNegativePrompt}`;
 
         if (looksLikeInlineDataUnsupported) {
           console.warn('[Image] Gateway does not support inlineData references; retrying without reference images.');
+          notifyInlineReferenceFallback();
           const fallbackBody = {
             ...requestBody,
             contents: [{ role: 'user', parts: [{ text: finalPrompt }] }],

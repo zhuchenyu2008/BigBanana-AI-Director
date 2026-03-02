@@ -596,7 +596,8 @@ export const enhanceKeyframePrompt = async (
   frameType: 'start' | 'end',
   model?: string
 ): Promise<string> => {
-  console.log(`🎨 enhanceKeyframePrompt 调用 - ${frameType === 'start' ? '起始帧' : '结束帧'} - 使用模型:`, model);
+  const resolvedModel = model || getActiveChatModel()?.id || '';
+  console.log(`🎨 enhanceKeyframePrompt 调用 - ${frameType === 'start' ? '起始帧' : '结束帧'} - 使用模型:`, resolvedModel || '(active default)');
   const startTime = Date.now();
 
   const styleDesc = getStylePromptCN(visualStyle);
@@ -630,7 +631,7 @@ ${frameType === 'start'
 `;
 
   try {
-    const result = await retryOperation(() => chatCompletion(prompt, model, 0.6, 1536));
+    const result = await retryOperation(() => chatCompletion(prompt, resolvedModel, 0.6, 1536));
     const duration = Date.now() - startTime;
 
     console.log(`✅ AI ${frameLabel}增强成功，耗时:`, duration, 'ms');

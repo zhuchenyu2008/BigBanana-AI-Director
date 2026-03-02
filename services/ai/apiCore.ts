@@ -365,7 +365,7 @@ export const chatCompletionStream = async (
   prompt: string,
   model?: string,
   temperature: number = 0.7,
-  responseFormat: 'json_object' | undefined,
+  responseFormat: 'json_object' | undefined = undefined,
   timeout: number = 600000,
   onDelta?: (delta: string) => void,
   abortSignal?: AbortSignal

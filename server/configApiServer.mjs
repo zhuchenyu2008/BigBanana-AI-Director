@@ -6,7 +6,9 @@ import { DatabaseSync } from 'node:sqlite';
 
 const PORT = Number(process.env.CONFIG_API_PORT || 8788);
 const DB_PATH = process.env.CONFIG_DB_PATH || '/data/config.db';
-const MAX_BODY_BYTES = Number(process.env.CONFIG_API_MAX_BODY_BYTES || 1024 * 1024);
+const MAX_BODY_BYTES = Number(process.env.CONFIG_API_MAX_BODY_BYTES || 50 * 1024 * 1024);
+const ENABLE_RESET = process.env.CONFIG_API_ENABLE_RESET === 'true';
+const ADMIN_TOKEN = process.env.CONFIG_API_ADMIN_TOKEN || '';
 
 const DEFAULT_STATE = {
   providers: [],
@@ -29,6 +31,15 @@ db.exec(`
     updated_at TEXT NOT NULL
   )
 `);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS storage_records (
+    bucket TEXT NOT NULL,
+    id TEXT NOT NULL,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (bucket, id)
+  )
+`);
 
 const selectStateStmt = db.prepare('SELECT value FROM configs WHERE key = ?');
 const upsertStateStmt = db.prepare(`
@@ -38,6 +49,16 @@ const upsertStateStmt = db.prepare(`
     value = excluded.value,
     updated_at = excluded.updated_at
 `);
+const selectStorageByIdStmt = db.prepare('SELECT value FROM storage_records WHERE bucket = ? AND id = ?');
+const selectStorageByBucketStmt = db.prepare('SELECT id, value FROM storage_records WHERE bucket = ? ORDER BY updated_at DESC');
+const upsertStorageStmt = db.prepare(`
+  INSERT INTO storage_records (bucket, id, value, updated_at)
+  VALUES (?, ?, ?, datetime('now'))
+  ON CONFLICT(bucket, id) DO UPDATE SET
+    value = excluded.value,
+    updated_at = excluded.updated_at
+`);
+const deleteStorageByIdStmt = db.prepare('DELETE FROM storage_records WHERE bucket = ? AND id = ?');
 
 const sendJson = (res, statusCode, payload) => {
   res.writeHead(statusCode, {
@@ -48,6 +69,7 @@ const sendJson = (res, statusCode, payload) => {
 };
 
 const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
+const ALLOWED_STORAGE_BUCKETS = new Set(['seriesProjects', 'series', 'episodes', 'assetLibrary']);
 
 const dedupeById = (list) => {
   const seen = new Set();
@@ -170,6 +192,35 @@ const readJsonBody = (req, maxBytes) => new Promise((resolve, reject) => {
   });
 });
 
+const parseStoragePath = (pathname) => {
+  const parts = pathname.split('/').filter(Boolean);
+  if (parts.length < 4) return null;
+  if (parts[0] !== 'api' || parts[1] !== 'config' || parts[2] !== 'storage') return null;
+  const bucket = parts[3];
+  const id = parts.length > 4 ? decodeURIComponent(parts.slice(4).join('/')) : '';
+  return { bucket, id };
+};
+
+const assertValidBucket = (bucket) => {
+  return ALLOWED_STORAGE_BUCKETS.has(bucket);
+};
+
+const parseStorageRows = (rows) => {
+  const items = [];
+  for (const row of rows || []) {
+    try {
+      const parsed = JSON.parse(row.value);
+      if (parsed && typeof parsed === 'object') {
+        if (!parsed.id && row.id) parsed.id = row.id;
+        items.push(parsed);
+      }
+    } catch {
+      // Skip malformed records.
+    }
+  }
+  return items;
+};
+
 const server = createServer(async (req, res) => {
   const method = req.method || 'GET';
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
@@ -199,9 +250,121 @@ const server = createServer(async (req, res) => {
   }
 
   if (method === 'POST' && url.pathname === '/api/config/model-registry/reset') {
+    if (!ENABLE_RESET) {
+      sendJson(res, 403, { error: 'Reset is disabled' });
+      return;
+    }
+    if (ADMIN_TOKEN) {
+      const token = req.headers['x-config-admin-token'];
+      if (token !== ADMIN_TOKEN) {
+        sendJson(res, 401, { error: 'Invalid admin token' });
+        return;
+      }
+    }
     const state = writeModelRegistryState(DEFAULT_STATE);
     sendJson(res, 200, state);
     return;
+  }
+
+  if (method === 'POST' && url.pathname === '/api/config/storage/batch-upsert') {
+    try {
+      const body = await readJsonBody(req, MAX_BODY_BYTES);
+      const bucket = normalizeString(body?.bucket);
+      const items = Array.isArray(body?.items) ? body.items : [];
+      if (!assertValidBucket(bucket)) {
+        sendJson(res, 400, { error: 'Invalid bucket' });
+        return;
+      }
+      for (const item of items) {
+        const id = normalizeString(item?.id);
+        if (!id) continue;
+        upsertStorageStmt.run(bucket, id, JSON.stringify({ ...item, id }));
+      }
+      sendJson(res, 200, { ok: true, count: items.length });
+      return;
+    } catch (error) {
+      const statusCode = Number(error?.statusCode || 500);
+      sendJson(res, statusCode, { error: statusCode === 500 ? 'Internal server error' : error.message });
+      return;
+    }
+  }
+
+  if (method === 'POST' && url.pathname === '/api/config/storage/batch-delete') {
+    try {
+      const body = await readJsonBody(req, MAX_BODY_BYTES);
+      const bucket = normalizeString(body?.bucket);
+      const ids = Array.isArray(body?.ids) ? body.ids : [];
+      if (!assertValidBucket(bucket)) {
+        sendJson(res, 400, { error: 'Invalid bucket' });
+        return;
+      }
+      for (const rawId of ids) {
+        const id = normalizeString(rawId);
+        if (!id) continue;
+        deleteStorageByIdStmt.run(bucket, id);
+      }
+      sendJson(res, 200, { ok: true, count: ids.length });
+      return;
+    } catch (error) {
+      const statusCode = Number(error?.statusCode || 500);
+      sendJson(res, statusCode, { error: statusCode === 500 ? 'Internal server error' : error.message });
+      return;
+    }
+  }
+
+  const storagePath = parseStoragePath(url.pathname);
+  if (storagePath) {
+    const { bucket, id } = storagePath;
+    if (!assertValidBucket(bucket)) {
+      sendJson(res, 400, { error: 'Invalid bucket' });
+      return;
+    }
+
+    if (method === 'GET' && !id) {
+      const field = normalizeString(url.searchParams.get('field'));
+      const value = normalizeString(url.searchParams.get('value'));
+      let items = parseStorageRows(selectStorageByBucketStmt.all(bucket));
+      if (field && value) {
+        items = items.filter((item) => normalizeString(item?.[field]) === value);
+      }
+      sendJson(res, 200, { items });
+      return;
+    }
+
+    if (method === 'GET' && id) {
+      const row = selectStorageByIdStmt.get(bucket, id);
+      if (!row?.value) {
+        sendJson(res, 404, { error: 'Not found' });
+        return;
+      }
+      try {
+        const parsed = JSON.parse(row.value);
+        if (parsed && typeof parsed === 'object' && !parsed.id) parsed.id = id;
+        sendJson(res, 200, { item: parsed });
+      } catch {
+        sendJson(res, 500, { error: 'Corrupted record' });
+      }
+      return;
+    }
+
+    if (method === 'PUT' && id) {
+      try {
+        const body = await readJsonBody(req, MAX_BODY_BYTES);
+        const normalized = { ...body, id };
+        upsertStorageStmt.run(bucket, id, JSON.stringify(normalized));
+        sendJson(res, 200, { item: normalized });
+      } catch (error) {
+        const statusCode = Number(error?.statusCode || 500);
+        sendJson(res, statusCode, { error: statusCode === 500 ? 'Internal server error' : error.message });
+      }
+      return;
+    }
+
+    if (method === 'DELETE' && id) {
+      deleteStorageByIdStmt.run(bucket, id);
+      sendJson(res, 200, { ok: true });
+      return;
+    }
   }
 
   sendJson(res, 404, { error: 'Not found' });

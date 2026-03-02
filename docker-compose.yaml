@@ -35,7 +35,8 @@ services:
     environment:
       CONFIG_API_PORT: "8788"
       CONFIG_DB_PATH: "/data/config.db"
-      CONFIG_API_MAX_BODY_BYTES: "1048576"
+      CONFIG_API_MAX_BODY_BYTES: "52428800"
+      CONFIG_API_ENABLE_RESET: "false"
     volumes:
       - ./data:/data
     expose:

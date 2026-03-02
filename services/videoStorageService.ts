@@ -55,7 +55,7 @@ const getVideoDirectory = async (): Promise<FileSystemDirectoryHandle> => {
 };
 
 export const supportsOPFSVideoStorage = (): boolean => {
-  return !!getStorageManager()?.getDirectory;
+  return false;
 };
 
 export const isOpfsVideoRef = (value?: string): boolean => {

@@ -29,18 +29,29 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 
 const bootstrap = async () => {
-  await initModelRegistry();
-  root.render(
-    <React.StrictMode>
-      <BrowserRouter>
-        <ThemeProvider>
-          <AlertProvider>
-            <App />
-          </AlertProvider>
-        </ThemeProvider>
-      </BrowserRouter>
-    </React.StrictMode>
-  );
+  try {
+    await initModelRegistry();
+    root.render(
+      <React.StrictMode>
+        <BrowserRouter>
+          <ThemeProvider>
+            <AlertProvider>
+              <App />
+            </AlertProvider>
+          </ThemeProvider>
+        </BrowserRouter>
+      </React.StrictMode>
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    root.render(
+      <div style={{ padding: '24px', fontFamily: 'sans-serif' }}>
+        <h2>Cloud Config Unavailable</h2>
+        <p>{message}</p>
+        <p>Please ensure `config-api` is running, then refresh.</p>
+      </div>
+    );
+  }
 };
 
 bootstrap();

@@ -434,7 +434,7 @@ export const PROMPT_TEMPLATE_FIELD_DEFINITIONS: PromptTemplateFieldDefinition[] 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
-const sanitizeSection = <T extends Record<string, string>>(
+const sanitizeSection = <T extends object>(
   input: unknown,
   defaults: T
 ): Partial<T> | undefined => {
@@ -443,7 +443,7 @@ const sanitizeSection = <T extends Record<string, string>>(
   (Object.keys(defaults) as Array<keyof T>).forEach((key) => {
     const value = input[String(key)];
     if (typeof value === 'string') {
-      sanitized[key] = value;
+      sanitized[key] = value as T[keyof T];
     }
   });
   return Object.keys(sanitized).length > 0 ? sanitized : undefined;
@@ -504,8 +504,9 @@ export const getPromptTemplateValueByPath = (
   path: PromptTemplatePath
 ): string => {
   const [category, key] = splitPromptTemplatePath(path);
-  const section = config[category] as Record<string, string>;
-  return section[key] || '';
+  const section = config[category];
+  const value = (section as unknown as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : '';
 };
 
 export const getDefaultPromptTemplateValue = (path: PromptTemplatePath): string => {
@@ -519,7 +520,9 @@ export const hasPromptTemplateOverride = (
   const normalized = sanitizePromptTemplateOverrides(overrides);
   if (!normalized) return false;
   const [category, key] = splitPromptTemplatePath(path);
-  return typeof (normalized[category] as Record<string, string> | undefined)?.[key] === 'string';
+  const section = normalized[category];
+  if (!section) return false;
+  return typeof (section as Record<string, unknown>)[key] === 'string';
 };
 
 export const setPromptTemplateOverride = (
@@ -529,8 +532,9 @@ export const setPromptTemplateOverride = (
 ): PromptTemplateOverrides => {
   const normalized = sanitizePromptTemplateOverrides(overrides) || {};
   const [category, key] = splitPromptTemplatePath(path);
+  const currentSection = (normalized[category] || {}) as Record<string, string>;
   const nextSection = {
-    ...((normalized[category] as Record<string, string>) || {}),
+    ...currentSection,
     [key]: value,
   };
   const next: PromptTemplateOverrides = {

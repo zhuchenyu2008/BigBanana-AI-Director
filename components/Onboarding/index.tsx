@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
-import { ONBOARDING_STORAGE_KEY, ONBOARDING_PAGES, TOTAL_PAGES } from './constants';
+import { ONBOARDING_PAGES, TOTAL_PAGES } from './constants';
 import ProgressDots from './ProgressDots';
 import WelcomePage from './WelcomePage';
 import WorkflowPage from './WorkflowPage';
@@ -14,6 +14,8 @@ interface OnboardingProps {
   currentApiKey?: string;
   onSaveApiKey?: (key: string) => void;
 }
+
+let onboardingCompletedInSession = false;
 
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onQuickStart, currentApiKey = '', onSaveApiKey }) => {
   const [currentPage, setCurrentPage] = useState(ONBOARDING_PAGES.WELCOME);
@@ -52,7 +54,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onQuickStart, curre
   };
 
   const markOnboardingComplete = () => {
-    localStorage.setItem(ONBOARDING_STORAGE_KEY, 'true');
+    onboardingCompletedInSession = true;
   };
 
   // 处理 API Key 保存
@@ -132,12 +134,12 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onQuickStart, curre
 
 // 检查是否需要显示引导
 export const shouldShowOnboarding = (): boolean => {
-  return localStorage.getItem(ONBOARDING_STORAGE_KEY) !== 'true';
+  return !onboardingCompletedInSession;
 };
 
 // 重置引导状态（用于帮助菜单中重新触发）
 export const resetOnboarding = (): void => {
-  localStorage.removeItem(ONBOARDING_STORAGE_KEY);
+  onboardingCompletedInSession = false;
 };
 
 export default Onboarding;
