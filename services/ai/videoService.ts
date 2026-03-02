@@ -14,6 +14,7 @@ import {
   convertVideoUrlToBase64,
   resizeImageToSize,
   getSoraVideoSize,
+  getActiveModel,
 } from './apiCore';
 
 const VOLCENGINE_TASK_DEFAULT_ENDPOINT = '/api/v3/contents/generations/tasks';
@@ -478,15 +479,20 @@ export const generateVideo = async (
   prompt: string,
   startImageBase64?: string,
   endImageBase64?: string,
-  model: string = 'sora-2',
+  model: string = '',
   aspectRatio: AspectRatio = '16:9',
   duration: VideoDuration = 8
 ): Promise<string> => {
-  const resolvedVideoModel = resolveModel('video', model);
-  const resolvedVideoModelId = (resolvedVideoModel as any)?.id || model;
-  const requestModel = resolveRequestModel('video', model) || '';
-  const apiKey = checkApiKey('video', model);
-  const apiBase = getApiBase('video', model);
+  // Normalize legacy callers (e.g. 'sora-2') to the active video model.
+  // resolveModel() returns undefined when the modelId isn't in registry.
+  const resolvedVideoModel = resolveModel('video', model) || getActiveModel('video');
+  const resolvedVideoModelId = (resolvedVideoModel as any)?.id || '';
+  const requestModel = resolvedVideoModelId
+    ? (resolveRequestModel('video', resolvedVideoModelId) || resolvedVideoModelId)
+    : (resolveRequestModel('video', model) || '');
+
+  const apiKey = checkApiKey('video', resolvedVideoModelId || model);
+  const apiBase = getApiBase('video', resolvedVideoModelId || model);
   const resolvedEndpoint = (resolvedVideoModel as any)?.endpoint || '';
   const normalizedRequestModel = (requestModel || resolvedVideoModelId || '').toLowerCase();
   const isVolcengineTaskMode =
@@ -509,7 +515,6 @@ export const generateVideo = async (
 
   const isAsyncMode =
     (resolvedVideoModel?.params as any)?.mode === 'async' ||
-    normalizedRequestModel === 'sora-2' ||
     normalizedRequestModel.startsWith('veo_3_1-fast');
 
   // 异步模式

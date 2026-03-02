@@ -10,7 +10,7 @@
 
 **BigBanana AI Director** 是一个 **AI 一站式短剧/漫剧平台**，面向创作者,实现从灵感到成片的高效生产。
 
-它摇弃了传统的"抽卡式"生成，采用 **"Script-to-Asset-to-Keyframe"** 的工业化工作流。通过深度集成 AntSK API 的先进 AI 模型，实现 **"一句话生成完整短剧，从剧本到成片全自动化"**，同时精准控制角色一致性、场景连续性与镜头运动。
+它摇弃了传统的"抽卡式"生成，采用 **"Script-to-Asset-to-Keyframe"** 的工业化工作流。通过可配置的多模型接入能力，实现 **"一句话生成完整短剧，从剧本到成片全自动化"**，同时精准控制角色一致性、场景连续性与镜头运动。
 
 ## 界面展示
 
@@ -91,72 +91,9 @@
     *   **Video**: `veo_3_1_i2v_s_fast_fl_landscape` / `sora-2` (首尾帧视频插值)
 *   **Storage**: IndexedDB (本地浏览器数据库，数据隐私安全，无后端依赖)
 
-## 为什么选择 AntSK API？
+## 使用说明
 
-本项目深度集成 [**AntSK API 平台**](https://api.antsk.cn/)，为创作者提供极致性价比的 AI 能力：
-
-### 🎯 全模型覆盖
-* **文本模型**: GPT-5.2、GPT-5.1、Claude 3.5 Sonnet
-* **视觉模型**: Gemini 3 Pro、Nano Banana Pro
-* **视频模型**: Sora-2、Veo-3.1 (支持关键帧插值)
-* **一站式调用**：统一 API 接口，无需多平台切换
-
-### 💰 超值定价
-* **官方 2 折以下**：所有模型价格均低于官方渠道 80%
-* **按需计费**：无最低消费，用多少付多少
-* **企业级稳定性**：99.9% SLA 保障，7x24 技术支持
-
-### 🚀 开发者友好
-* **OpenAI 兼容协议**：零代码迁移成本
-* **详细文档**：完整的 API 文档和示例代码
-* **实时监控**：可视化用量统计和费用追踪
-
-[**立即注册领取免费额度**](https://api.antsk.cn/) →
-
-## ⚠️ 开源与“免费”说明（请务必阅读）
-
-* **模型使用说明**：本开源项目默认工作流需要使用对应能力的模型组合，例如大语言模型（如 **GPT-5.2**）、图像模型（如 **Nano Banana Pro**）以及视频模型（如 **Sora-2** / **Veo-3.1**）；如需对接其他渠道或模型，可自行修改与适配。
-* **关于开源初衷**：我们做开源，是希望降低使用门槛，让更多创作者能快速上手与集成；项目代码开源，模型配置也开放可替换。
-* **关于 API 服务**：我们提供的 API 主要用于帮助大家快速体验与接入，并非依赖这部分收入盈利。
-* **关于选择自由**：如果你对我们的 API 不满意，完全可以直接使用 OpenAI 或 Google 官方服务（即使价格更高也没关系），这是正常且被尊重的选择。
-* **关于“永久免费”预期**：如果你的核心诉求是长期“必须免费”，并以“免费即唯一标准”评估项目，这个项目可能不适合你；更建议体验千问、元宝、豆包等产品（顺便奶茶红包也别错过 😄）。
-
----
-
-## 💬 加入交流群
-
-扫码加入【大香蕉】产品体验群，与其他创作者交流经验、获取最新功能更新：
-
-<div align="center">
-<img src="./images/qrcode.jpg" width="300" alt="微信群二维码">
-<p><i>微信扫码加入交流群</i></p>
-</div>
-
----
-
-### 🎨 轻量级创作工具推荐
-
-如果你需要**快速完成单次创作任务**，可以试试我们的在线工具平台：
-
-**[BigBanana 创作工坊](https://bigbanana.tree456.com/)** 提供：
-* 📷 **[AI 绘图](https://bigbanana.tree456.com/gemini-image.html)**：文字转图片，支持多种风格
-* 📊 **[AI PPT](https://bigbanana.tree456.com/ppt-content.html)**：一键生成演示文稿
-* 🎬 **[AI 视频](https://bigbanana.tree456.com/ai-video-content.html)**：智能视频内容生成
-* 📱 **[小红书文案](https://bigbanana.tree456.com/redink-content.html)**：爆款标题和内容生成
-* 📖 **[AI 小说创作](https://bigbanana.tree456.com/novel-creation.html)**：智能小说生成与续写
-* 🎨 **[AI 动漫生成](https://bigbanana.tree456.com/anime-content.html)**：动漫风格图片创作
-* 🎭 **无需安装**：浏览器直接使用，即开即用
-
-**适合场景**：日常创作、快速原型、灵感验证  
-**本项目更适合**：系统化短剧制作、批量视频生产、工业化工作流
-
-## 客户端下载
-
-直接下载安装包，开箱即用，无需配置开发环境：
-
-**[📥 下载 BigBanana AI Director 客户端 (Windows)](https://tree456.oss-cn-beijing.aliyuncs.com/BigBanana%20AI%20Director%20Setup%201.0.0.exe?Expires=1770908400&OSSAccessKeyId=TMP.3KofXPaUNdnvbUpRP5MqiRmMMxuGwiftTgQfn7U3ntRtFvMYHpMB2kPb17r7rPXksvo7DFncrz4dWSfs3K33wVgGXfnCy4&Signature=wiOZbN%2BcZNuyZdiEI3KR1CqkFhM%3D)**
-
-> 💡 下载后双击安装即可使用，支持 Windows 系统。
+你可以在模型配置中接入自己的 API 提供商与模型，项目默认不内置任何提供商或模型条目。
 
 ---
 
@@ -187,16 +124,16 @@ git clone https://github.com/shuyu-labs/BigBanana-AI-Director.git
 cd BigBanana-AI-Director
 
 # 2. 使用 Docker Compose 构建并启动
-docker-compose up -d --build
+docker compose up -d --build
 
 # 3. 访问应用
-# 浏览器打开 http://localhost:3005
+# 浏览器打开 http://localhost:13000
 
 # 查看日志
-docker-compose logs -f
+docker compose logs -f
 
 # 停止容器
-docker-compose down
+docker compose down
 ```
 
 ### 方式三：使用 Docker 命令
@@ -210,10 +147,10 @@ cd BigBanana-AI-Director
 docker build -t bigbanana-ai .
 
 # 3. 运行容器
-docker run -d -p 3005:80 --name bigbanana-ai-app bigbanana-ai
+docker run -d -p 13000:80 --name bigbanana-ai-app bigbanana-ai
 
 # 4. 访问应用
-# 浏览器打开 http://localhost:3005
+# 浏览器打开 http://localhost:13000
 
 # 查看日志
 docker logs -f bigbanana-ai-app
@@ -232,15 +169,15 @@ npm run build
 npm run preview
 
 # 强制无缓存重新构建 Docker 镜像
-docker-compose build --no-cache
-docker-compose up -d --force-recreate
+docker compose build --no-cache
+docker compose up -d --force-recreate
 ```
 
 ---
 
 ## 快速开始
 
-1.  **配置密钥**: 启动应用，输入 AntSK API Key。[**立即购买**](https://api.antsk.cn)
+1.  **配置密钥**: 启动应用，在模型配置中填写你使用的 API Key。
 2.  **故事输入**: 在 Phase 01 输入你的故事创意，点击"生成分镜脚本"。
 3.  **美术设定**: 进入 Phase 02，生成主角定妆照和核心场景图。
 4.  **分镜制作**: 进入 Phase 03，先生成首帧；如需更强可控性可补充尾帧，或用九宫格分镜预览来挑选首帧构图。
@@ -261,9 +198,7 @@ docker-compose up -d --force-recreate
 
 - ✅ 允许个人学习和非商业用途
 - ✅ 允许修改和二次创作（需使用相同许可证）
-- ❌ 禁止商业用途（需获得商业授权）
-
-如需商业授权，请联系：antskpro@qq.com
+- ❌ 禁止商业用途
 
 ---
 

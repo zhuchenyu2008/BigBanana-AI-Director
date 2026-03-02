@@ -65,9 +65,9 @@ export const validateConfig = (config: {
   if (parseDurationToSeconds(config.duration) === null) {
     return { valid: false, error: '目标时长格式无效，请使用如 90s、3m 或 2min。' };
   }
-  if (!config.model) {
-    return { valid: false, error: '请选择或输入模型名称。' };
-  }
+  // model 允许为空：表示“使用已配置的默认模型”（由模型配置中心决定）
+  // 只有在用户选择 custom 但未输入时，才会在 UI 层提示。
+  
   if (!config.visualStyle) {
     return { valid: false, error: '请选择或输入视觉风格。' };
   }

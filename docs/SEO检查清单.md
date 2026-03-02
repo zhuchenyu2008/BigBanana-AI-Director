@@ -237,16 +237,13 @@ http://localhost:3000/sitemap.xml
 - sitemap.xml: `/sitemap.xml`
 
 ### 联系方式
-- 官网: https://tree456.com
-- 产品页: https://bigbanana.tree456.com
-- API 购买: https://api.antsk.cn
+- 项目仓库: https://github.com/shuyu-labs/BigBanana-AI-Director
 
 ---
 
 **检查清单版本**: 1.0  
 **最后更新**: 2025-12-18  
 **状态**: ✅ 已完成基础配置
-
 
 
 

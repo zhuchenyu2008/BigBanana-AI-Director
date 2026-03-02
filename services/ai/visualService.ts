@@ -45,7 +45,7 @@ export const generateArtDirection = async (
   scenes: { location: string; time: string; atmosphere: string }[],
   visualStyle: string,
   language: string = '中文',
-  model: string = 'gpt-5.2',
+  model?: string,
   abortSignal?: AbortSignal
 ): Promise<ArtDirection> => {
   console.log('🎨 generateArtDirection 调用 - 生成全局美术指导文档');
@@ -162,7 +162,7 @@ export const generateAllCharacterPrompts = async (
   genre: string,
   visualStyle: string,
   language: string = '中文',
-  model: string = 'gpt-5.2',
+  model?: string,
   abortSignal?: AbortSignal
 ): Promise<{ visualPrompt: string; negativePrompt: string }[]> => {
   console.log(`🎭 generateAllCharacterPrompts 调用 - 批量生成 ${characters.length} 个角色的视觉提示词`);
@@ -296,7 +296,7 @@ export const generateVisualPrompts = async (
   type: 'character' | 'scene' | 'prop',
   data: Character | Scene | Prop,
   genre: string,
-  model: string = 'gpt-5.2',
+  model?: string,
   visualStyle: string = 'live-action',
   language: string = '中文',
   artDirection?: ArtDirection,
@@ -766,6 +766,58 @@ const extractImageFromOpenAiResponse = (response: any): string | null => {
   return null;
 };
 
+/**
+ * Some upstream gateways return SSE text like:
+ *   data: {...}\n\n data: {...}\n\n data: [DONE]
+ * even for endpoints that normally return JSON.
+ * This helper normalizes Response into a JSON object.
+ */
+const parseJsonOrSseJson = async (res: Response): Promise<any> => {
+  // IMPORTANT: body streams can only be read once.
+  // Read as text first, then parse as JSON or SSE-wrapped JSON.
+  const text = await res.text();
+  const trimmed = text.trim();
+  if (!trimmed) throw new Error('Empty response');
+
+  // Plain JSON
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    return JSON.parse(trimmed);
+  }
+
+  // SSE style: collect data: lines and choose the best JSON chunk.
+  // Some gateways stream multiple JSON objects, where later chunks may omit image parts.
+  const lines = trimmed.split(/\r?\n/);
+  const payloads: string[] = [];
+  for (const line of lines) {
+    const l = line.trim();
+    if (!l.startsWith('data:')) continue;
+    const data = l.slice(5).trim();
+    if (!data || data === '[DONE]') continue;
+    payloads.push(data);
+  }
+  if (payloads.length === 0) {
+    throw new Error(`Invalid JSON response: ${trimmed.slice(0, 120)}`);
+  }
+
+  let lastParsed: any = null;
+  for (const payload of payloads) {
+    try {
+      lastParsed = JSON.parse(payload);
+    } catch {
+      continue;
+    }
+    const parts = lastParsed?.candidates?.[0]?.content?.parts;
+    if (Array.isArray(parts) && parts.length > 0) {
+      // Prefer the first chunk that actually contains parts (may include image)
+      return lastParsed;
+    }
+  }
+
+  // Fallback to last parsed object
+  if (lastParsed) return lastParsed;
+  return JSON.parse(payloads[payloads.length - 1]);
+};
+
 export const generateImage = async (
   prompt: string,
   referenceImages: string[] = [],
@@ -1029,7 +1081,7 @@ NEGATIVE PROMPT (strictly avoid): ${compactNegativePrompt}`;
           throw buildImageApiError(status, parsedError.message);
         }
 
-        return await res.json();
+        return await parseJsonOrSseJson(res);
       });
 
       const openAiImage = extractImageFromOpenAiResponse(response);
@@ -1091,7 +1143,7 @@ NEGATIVE PROMPT (strictly avoid): ${compactNegativePrompt}`;
       };
     }
 
-    const response = await retryOperation(async () => {
+    const doGeminiRequest = async (body: any) => {
       const res = await fetch(`${apiBase}${imageModelEndpoint}`, {
         method: 'POST',
         headers: {
@@ -1099,7 +1151,7 @@ NEGATIVE PROMPT (strictly avoid): ${compactNegativePrompt}`;
           'Authorization': `Bearer ${apiKey}`,
           'Accept': '*/*'
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(body)
       });
 
       if (!res.ok) {
@@ -1109,14 +1161,41 @@ NEGATIVE PROMPT (strictly avoid): ${compactNegativePrompt}`;
         throw buildImageApiError(status, parsedError.message);
       }
 
-      return await res.json();
+      return await parseJsonOrSseJson(res);
+    };
+
+    const response = await retryOperation(async () => {
+      try {
+        return await doGeminiRequest(requestBody);
+      } catch (e: any) {
+        // Some OneAPI-compatible gateways do not support inlineData parts (reference images)
+        // and will fail with JSON unmarshal errors. In that case, retry without references.
+        const msg = String(e?.message || '');
+        const looksLikeInlineDataUnsupported =
+          hasAnyReference &&
+          msg.toLowerCase().includes('cannot unmarshal') &&
+          msg.toLowerCase().includes('content');
+
+        if (looksLikeInlineDataUnsupported) {
+          console.warn('[Image] Gateway does not support inlineData references; retrying without reference images.');
+          const fallbackBody = {
+            ...requestBody,
+            contents: [{ role: 'user', parts: [{ text: finalPrompt }] }],
+          };
+          return await doGeminiRequest(fallbackBody);
+        }
+
+        throw e;
+      }
     });
 
     const candidates = response.candidates || [];
     if (candidates.length > 0 && candidates[0].content && candidates[0].content.parts) {
       for (const part of candidates[0].content.parts) {
-        if (part.inlineData) {
-          const result = `data:image/png;base64,${part.inlineData.data}`;
+        // 1) Official Gemini inlineData
+        if (part.inlineData?.data) {
+          const mime = part.inlineData.mimeType || 'image/png';
+          const result = `data:${mime};base64,${part.inlineData.data}`;
 
           addRenderLogWithTokens({
             type: 'keyframe',
@@ -1129,6 +1208,24 @@ NEGATIVE PROMPT (strictly avoid): ${compactNegativePrompt}`;
           });
 
           return result;
+        }
+
+        // 2) Some gateways wrap base64 image in markdown text:
+        //    ![image](data:image/jpeg;base64,....)
+        if (typeof part.text === 'string' && part.text.includes('data:image')) {
+          const m = part.text.match(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/);
+          if (m) {
+            addRenderLogWithTokens({
+              type: 'keyframe',
+              resourceId: 'image-' + Date.now(),
+              resourceName: prompt.substring(0, 50) + '...',
+              status: 'success',
+              model: imageModelId,
+              prompt: prompt,
+              duration: Date.now() - startTime
+            });
+            return m[0];
+          }
         }
       }
     }
@@ -1220,7 +1317,7 @@ export const generateCharacterTurnaroundPanels = async (
   visualStyle: string,
   artDirection?: ArtDirection,
   language: string = '中文',
-  model: string = 'gpt-5.2',
+  model?: string,
   abortSignal?: AbortSignal
 ): Promise<CharacterTurnaroundPanel[]> => {
   console.log(`🎭 generateCharacterTurnaroundPanels - 为角色 ${character.name} 生成九宫格造型视角`);

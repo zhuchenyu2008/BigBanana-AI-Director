@@ -25,6 +25,7 @@ import AssetMatchDialog from './AssetMatchDialog';
 import { findAssetMatches, applyAssetMatches, AssetMatchResult } from '../../services/assetMatchService';
 import { loadSeriesProject } from '../../services/storageService';
 import { resolvePromptTemplateConfig } from '../../services/promptTemplateService';
+import { getActiveChatModel, getChatModels } from '../../services/modelRegistry';
 
 interface Props {
   project: ProjectState;
@@ -341,7 +342,15 @@ const StageScript: React.FC<Props> = ({ project, updateProject, onShowModelConfi
     setLocalTitle(project.title);
     setLocalDuration(project.targetDuration || DEFAULTS.duration);
     setLocalLanguage(project.language || DEFAULTS.language);
-    setLocalModel(project.shotGenerationModel || DEFAULTS.model);
+
+    // 兼容旧项目：历史上 shotGenerationModel 可能是内置默认（如 gpt-5.2）。
+    // 现在不再内置模型：若项目里记录的模型不在“已启用的 chat 模型列表”中，则回退为当前配置中心的 active chat model。
+    const enabledChatIds = new Set(getChatModels().filter(m => m.isEnabled).map(m => m.id));
+    const preferredModel = (project.shotGenerationModel || '').trim();
+    const fallbackModel = getActiveChatModel()?.id || DEFAULTS.model;
+    const nextModel = preferredModel && enabledChatIds.has(preferredModel) ? preferredModel : fallbackModel;
+    setLocalModel(nextModel);
+
     setLocalVisualStyle(project.visualStyle || DEFAULTS.visualStyle);
     setEnableQualityCheck(true);
     setRewriteInstruction('');
@@ -816,10 +825,7 @@ const StageScript: React.FC<Props> = ({ project, updateProject, onShowModelConfi
       setError("请先输入一些剧本内容作为基础。");
       return;
     }
-    if (!finalModel) {
-      setError("请选择或输入模型名称。");
-      return;
-    }
+    // finalModel 允许为空：表示“使用已配置的默认模型”（由模型配置中心决定）
     if (continueBudget <= 0) {
       const message = `当前剧本已达到单集上限 ${SCRIPT_HARD_LIMIT} 字符，无法继续续写，请先拆分为多集。`;
       setError(message);
@@ -908,10 +914,7 @@ const StageScript: React.FC<Props> = ({ project, updateProject, onShowModelConfi
       setError("请先输入剧本内容。");
       return;
     }
-    if (!finalModel) {
-      setError("请选择或输入模型名称。");
-      return;
-    }
+    // finalModel 允许为空：表示“使用已配置的默认模型”（由模型配置中心决定）
 
     setIsRewriting(true);
     setProcessingMessage('AI改写中...');
@@ -1012,10 +1015,7 @@ const StageScript: React.FC<Props> = ({ project, updateProject, onShowModelConfi
       setError('请输入改写要求。');
       return;
     }
-    if (!finalModel) {
-      setError('请选择或输入模型名称。');
-      return;
-    }
+    // finalModel 允许为空：表示“使用已配置的默认模型”（由模型配置中心决定）
 
     const baseScript = localScript;
     const selectedSegment = baseScript.slice(currentSelection.start, currentSelection.end);
