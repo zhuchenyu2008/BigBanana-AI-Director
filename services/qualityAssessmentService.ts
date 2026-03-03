@@ -1,10 +1,19 @@
 import { ScriptData, Shot, ShotQualityAssessment, QualityCheck } from '../types';
+import { getModelById } from './modelRegistry';
 
 const QUALITY_SCHEMA_VERSION = 1;
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
 const resolveSupportsEndFrame = (modelId?: string): boolean => {
+  try {
+    const configured = modelId ? (getModelById(modelId) as any) : undefined;
+    const configuredCapability = configured?.params?.capabilities?.supportsEndFrame;
+    if (typeof configuredCapability === 'boolean') return configuredCapability;
+  } catch {
+    // Model registry may not be initialized in isolated utility calls.
+  }
+
   const id = (modelId || '').toLowerCase();
   if (!id) return false;
   if (id.startsWith('sora') || id.startsWith('doubao-seedance')) return false;

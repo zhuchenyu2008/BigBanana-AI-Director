@@ -166,6 +166,9 @@ const ModelCard: React.FC<ModelCardProps> = ({
               : '异步（Sora 类）'
         }
       </div>
+      <div className="text-[10px] text-[var(--text-muted)]">
+        其他视频能力参数已改为系统自动推断，无需手动配置。
+      </div>
     </div>
   );
 

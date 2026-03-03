@@ -19,6 +19,7 @@ import {
   resolvePromptTemplateConfig,
   withTemplateFallback,
 } from '../../services/promptTemplateService';
+import { getModelById } from '../../services/modelRegistry';
 
 const KEYFRAME_META_SPLITTER = '\n\n---PROMPT_META_START---';
 
@@ -81,6 +82,39 @@ const normalizeVideoModelIdForRouting = (videoModel: string): string => {
 export const resolveVideoModelRouting = (videoModel: string): VideoModelRouting => {
   const normalizedModelId = normalizeVideoModelIdForRouting(videoModel);
   const id = normalizedModelId.toLowerCase();
+  let configuredModel: any;
+  try {
+    configuredModel = getModelById(normalizedModelId) as any;
+  } catch {
+    configuredModel = undefined;
+  }
+  const configuredApiSpec = configuredModel?.params?.apiSpec as string | undefined;
+  const configuredCapabilities = configuredModel?.params?.capabilities as
+    | { supportsStartFrame?: boolean; supportsEndFrame?: boolean }
+    | undefined;
+
+  if (configuredApiSpec || configuredCapabilities) {
+    const family: VideoModelFamily =
+      configuredApiSpec === 'volcengine-task'
+        ? 'doubao-task'
+        : configuredApiSpec === 'openai-videos'
+          ? (id.startsWith('veo') ? 'veo-fast' : 'sora')
+          : id.startsWith('veo')
+            ? 'veo-fast'
+            : id.startsWith('sora')
+              ? 'sora'
+              : id.startsWith('doubao')
+                ? 'doubao-task'
+                : 'unknown';
+
+    return {
+      family,
+      normalizedModelId,
+      supportsStartFrame: configuredCapabilities?.supportsStartFrame ?? true,
+      supportsEndFrame: configuredCapabilities?.supportsEndFrame ?? true,
+      prefersNineGridStoryboard: family === 'sora' || family === 'doubao-task' || family === 'veo-fast',
+    };
+  }
 
   if (id.startsWith('doubao-seedance')) {
     return {

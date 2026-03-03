@@ -4,6 +4,7 @@
  */
 
 import { AspectRatio, VideoDuration } from "../../types";
+import { VideoApiSpec, VideoGenerateOptions } from "../../types/model";
 import {
   retryOperation,
   checkApiKey,
@@ -19,12 +20,118 @@ import {
 const VOLCENGINE_TASK_DEFAULT_ENDPOINT = '/api/v3/contents/generations/tasks';
 const VOLCENGINE_DEFAULT_MODEL = 'doubao-seedance-1-5-pro-251215';
 
+interface UnifiedVideoRequest extends VideoGenerateOptions {
+  model: string;
+}
+
+interface VideoRequestRuntimeContext {
+  apiKey: string;
+  apiBase: string;
+  endpoint?: string;
+  requestModel: string;
+  resolvedModelId: string;
+  apiSpec: VideoApiSpec;
+}
+
+const normalizeImageInput = (image?: string): string | undefined => {
+  if (!image) return undefined;
+  const value = image.trim();
+  return value || undefined;
+};
+
+const dedupeImageInputs = (images: Array<string | undefined>): string[] => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  images.forEach((image) => {
+    const normalized = normalizeImageInput(image);
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    result.push(normalized);
+  });
+  return result;
+};
+
 const mapVolcengineRatio = (
   aspectRatio: AspectRatio,
   hasImageInput: boolean
 ): '16:9' | '9:16' | 'adaptive' => {
   if (hasImageInput) return 'adaptive';
   return aspectRatio === '9:16' ? '9:16' : '16:9';
+};
+
+const normalizeEndpoint = (endpoint?: string, fallback: string = '/v1/videos'): string => {
+  const normalized = (endpoint || fallback).trim();
+  if (!normalized) return fallback;
+  return normalized.startsWith('/') ? normalized : `/${normalized}`;
+};
+
+const normalizeVideosEndpoint = (endpoint?: string): string => {
+  const normalized = normalizeEndpoint(endpoint, '/v1/videos');
+  return normalized.includes('/videos') ? normalized : '/v1/videos';
+};
+
+const normalizeChatEndpoint = (endpoint?: string): string => {
+  const normalized = normalizeEndpoint(endpoint, '/v1/chat/completions');
+  return normalized.includes('/chat/completions') ? normalized : '/v1/chat/completions';
+};
+
+const normalizeVolcengineTaskEndpoint = (endpoint?: string): string => {
+  const normalized = normalizeEndpoint(endpoint, VOLCENGINE_TASK_DEFAULT_ENDPOINT);
+  return normalized.includes('/contents/generations/tasks')
+    ? normalized
+    : VOLCENGINE_TASK_DEFAULT_ENDPOINT;
+};
+
+const resolveVideoApiSpec = (
+  resolvedModel: any,
+  resolvedEndpoint: string,
+  requestModel: string
+): VideoApiSpec => {
+  const configuredSpec = resolvedModel?.params?.apiSpec as VideoApiSpec | undefined;
+  if (configuredSpec) return configuredSpec;
+
+  const endpoint = (resolvedEndpoint || '').toLowerCase();
+  const modelName = (requestModel || resolvedModel?.id || '').toLowerCase();
+
+  if (endpoint.includes('/contents/generations/tasks') || modelName.startsWith('doubao-seedance')) {
+    return 'volcengine-task';
+  }
+  if (endpoint.includes('/chat/completions')) {
+    return 'chat-completions';
+  }
+  if (endpoint.includes('/v1/videos') || modelName.startsWith('sora') || modelName.startsWith('veo_3_1-fast')) {
+    return 'openai-videos';
+  }
+  return resolvedModel?.params?.mode === 'sync' ? 'chat-completions' : 'openai-videos';
+};
+
+const coerceVideoApiSpec = (
+  runtimeContext: VideoRequestRuntimeContext
+): VideoRequestRuntimeContext => {
+  const modelName = (runtimeContext.requestModel || runtimeContext.resolvedModelId || '').toLowerCase();
+  if (modelName.startsWith('veo_3_1-fast') || modelName.startsWith('sora')) {
+    if (runtimeContext.apiSpec !== 'openai-videos') {
+      console.warn(
+        `⚠️ API spec override: model ${runtimeContext.requestModel || runtimeContext.resolvedModelId} ` +
+        `should use openai-videos. Current spec=${runtimeContext.apiSpec}, auto-corrected.`
+      );
+    }
+    return {
+      ...runtimeContext,
+      apiSpec: 'openai-videos',
+      endpoint: normalizeVideosEndpoint(runtimeContext.endpoint),
+    };
+  }
+
+  if (modelName.startsWith('doubao-seedance')) {
+    return {
+      ...runtimeContext,
+      apiSpec: 'volcengine-task',
+      endpoint: normalizeVolcengineTaskEndpoint(runtimeContext.endpoint),
+    };
+  }
+
+  return runtimeContext;
 };
 
 // ============================================
@@ -36,17 +143,22 @@ const mapVolcengineRatio = (
  * 流程：1. 创建任务 -> 2. 轮询状态 -> 3. 下载视频
  */
 const generateVideoAsync = async (
-  prompt: string,
-  startImageBase64: string | undefined,
-  endImageBase64: string | undefined,
-  apiKey: string,
+  request: UnifiedVideoRequest,
+  context: VideoRequestRuntimeContext,
   aspectRatio: AspectRatio = '16:9',
   duration: VideoDuration = 8,
-  modelName: string = 'sora-2',
   allowDualRefFallback: boolean = true
 ): Promise<string> => {
-  let references = [startImageBase64, endImageBase64].filter(Boolean) as string[];
-  const resolvedModelName = modelName || 'sora-2';
+  const { apiKey, apiBase, endpoint, requestModel } = context;
+  const prompt = request.prompt;
+  const startImageBase64 = normalizeImageInput(request.startImage);
+  const endImageBase64 = normalizeImageInput(request.endImage);
+  let references = dedupeImageInputs([
+    startImageBase64,
+    endImageBase64,
+    ...(request.referenceImages || []),
+  ]);
+  const resolvedModelName = requestModel || 'sora-2';
   const useReferenceArray = resolvedModelName.toLowerCase().startsWith('veo_3_1-fast');
   if (resolvedModelName === 'sora-2' && references.length >= 2) {
     console.warn('⚠️ Capability routing: sora-2 only supports start-frame reference. End-frame reference will be ignored.');
@@ -64,7 +176,7 @@ const generateVideoAsync = async (
 
   console.log(`📐 视频尺寸: ${VIDEO_WIDTH}x${VIDEO_HEIGHT}`);
 
-  const apiBase = getApiBase('video', resolvedModelName);
+  const videosEndpoint = normalizeVideosEndpoint(endpoint);
 
   // Step 1: 创建视频任务
   const formData = new FormData();
@@ -72,6 +184,9 @@ const generateVideoAsync = async (
   formData.append('prompt', prompt);
   formData.append('seconds', String(duration));
   formData.append('size', videoSize);
+  if (request.modelVersion) {
+    formData.append('model_version', request.modelVersion);
+  }
 
   const appendReference = async (base64: string, filename: string, fieldName: string) => {
     const cleanBase64 = base64.replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
@@ -95,11 +210,32 @@ const generateVideoAsync = async (
     await appendReference(references[0], 'reference.png', 'input_reference');
   }
 
+  const metadata: Record<string, any> = { ...(request.metadata || {}) };
+  if (request.modelVersion && metadata.model_version === undefined) {
+    metadata.model_version = request.modelVersion;
+  }
+  if (startImageBase64?.startsWith('http') && metadata.first_frame_url === undefined) {
+    metadata.first_frame_url = startImageBase64;
+  }
+  if (endImageBase64?.startsWith('http') && metadata.last_frame_url === undefined) {
+    metadata.last_frame_url = endImageBase64;
+  }
+  if (Object.keys(metadata).length > 0) {
+    formData.append('metadata', JSON.stringify(metadata));
+  }
+
+  if (request.providerOptions) {
+    Object.entries(request.providerOptions).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      formData.append(key, String(value));
+    });
+  }
+
   if (references.length > 0) {
     console.log('✅ 参考图片已调整尺寸并添加');
   }
 
-  const createResponse = await fetch(`${apiBase}/v1/videos`, {
+  const createResponse = await fetch(`${apiBase}${videosEndpoint}`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`
@@ -144,7 +280,7 @@ const generateVideoAsync = async (
   while (Date.now() - startTime < maxPollingTime) {
     await new Promise(resolve => setTimeout(resolve, pollingInterval));
 
-    const statusResponse = await fetch(`${apiBase}/v1/videos/${taskId}`, {
+    const statusResponse = await fetch(`${apiBase}${videosEndpoint}/${taskId}`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -185,13 +321,15 @@ const generateVideoAsync = async (
           `⚠️ ${resolvedModelName} 双参考任务失败，自动降级为单参考重试。原始错误: ${errorMessage}`
         );
         return generateVideoAsync(
-          prompt,
-          references[0],
-          undefined,
-          apiKey,
+          {
+            ...request,
+            startImage: references[0],
+            endImage: undefined,
+            referenceImages: [],
+          },
+          context,
           aspectRatio,
           duration,
-          resolvedModelName,
           false
         );
       }
@@ -221,7 +359,7 @@ const generateVideoAsync = async (
       const downloadController = new AbortController();
       const downloadTimeoutId = setTimeout(() => downloadController.abort(), downloadTimeout);
 
-      const downloadResponse = await fetch(`${apiBase}/v1/videos/${videoId}/content`, {
+      const downloadResponse = await fetch(`${apiBase}${videosEndpoint}/${videoId}/content`, {
         method: 'GET',
         headers: {
           'Accept': '*/*',
@@ -285,12 +423,6 @@ const generateVideoAsync = async (
   throw new Error('下载视频失败：已达最大重试次数');
 };
 
-const normalizeEndpoint = (endpoint?: string, fallback: string = VOLCENGINE_TASK_DEFAULT_ENDPOINT): string => {
-  const normalized = (endpoint || fallback).trim();
-  if (!normalized) return fallback;
-  return normalized.startsWith('/') ? normalized : `/${normalized}`;
-};
-
 const safeJsonParse = async (response: Response): Promise<any | null> => {
   try {
     return await response.json();
@@ -333,17 +465,16 @@ const extractVideoUrlFromTaskPayload = (payload: any): string | null => {
  * 流程：1) POST 创建任务 2) GET 轮询任务 3) 下载 video_url
  */
 const generateVideoVolcengineTask = async (
-  prompt: string,
-  startImageBase64: string | undefined,
-  endImageBase64: string | undefined,
-  apiKey: string,
-  apiBase: string,
+  request: UnifiedVideoRequest,
+  context: VideoRequestRuntimeContext,
   aspectRatio: AspectRatio = '16:9',
-  duration: VideoDuration = 5,
-  modelName: string = VOLCENGINE_DEFAULT_MODEL,
-  endpoint: string = VOLCENGINE_TASK_DEFAULT_ENDPOINT
+  duration: VideoDuration = 5
 ): Promise<string> => {
-  const taskEndpoint = normalizeEndpoint(endpoint, VOLCENGINE_TASK_DEFAULT_ENDPOINT);
+  const { apiKey, apiBase, endpoint, requestModel, resolvedModelId } = context;
+  const prompt = request.prompt;
+  const startImageBase64 = normalizeImageInput(request.startImage) || normalizeImageInput(request.referenceImages?.[0]);
+  const endImageBase64 = normalizeImageInput(request.endImage);
+  const taskEndpoint = normalizeVolcengineTaskEndpoint(endpoint);
 
   if (endImageBase64) {
     console.warn('⚠️ Volcengine task mode currently uses start-frame only. End frame will be ignored.');
@@ -383,11 +514,13 @@ const generateVideoVolcengineTask = async (
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: modelName || VOLCENGINE_DEFAULT_MODEL,
+      model: requestModel || resolvedModelId || VOLCENGINE_DEFAULT_MODEL,
       content,
       ratio,
       duration,
       watermark: false,
+      ...(request.modelVersion ? { model_version: request.modelVersion } : {}),
+      ...(request.providerOptions || {}),
     }),
   });
 
@@ -476,13 +609,22 @@ const generateVideoVolcengineTask = async (
  * 支持同步（chat/completions）和异步（/v1/videos、任务接口）两种模式
  */
 export const generateVideo = async (
-  prompt: string,
-  startImageBase64?: string,
-  endImageBase64?: string,
-  model: string = '',
-  aspectRatio: AspectRatio = '16:9',
-  duration: VideoDuration = 8
+  options: VideoGenerateOptions
 ): Promise<string> => {
+  const unifiedRequest: UnifiedVideoRequest = {
+    prompt: options.prompt,
+    startImage: normalizeImageInput(options.startImage),
+    endImage: normalizeImageInput(options.endImage),
+    referenceImages: dedupeImageInputs(options.referenceImages || []),
+    aspectRatio: options.aspectRatio || '16:9',
+    duration: options.duration || 8,
+    modelVersion: options.modelVersion,
+    metadata: options.metadata || {},
+    providerOptions: options.providerOptions,
+    model: options.model || '',
+  };
+  const model = options.model || '';
+
   // Normalize legacy callers (e.g. 'sora-2') to the active video model.
   // resolveModel() returns undefined when the modelId isn't in registry.
   const resolvedVideoModel = resolveModel('video', model) || getActiveModel('video');
@@ -494,55 +636,49 @@ export const generateVideo = async (
   const apiKey = checkApiKey('video', resolvedVideoModelId || model);
   const apiBase = getApiBase('video', resolvedVideoModelId || model);
   const resolvedEndpoint = (resolvedVideoModel as any)?.endpoint || '';
-  const normalizedRequestModel = (requestModel || resolvedVideoModelId || '').toLowerCase();
-  const isVolcengineTaskMode =
-    resolvedEndpoint.includes('/contents/generations/tasks') ||
-    normalizedRequestModel.startsWith('doubao-seedance');
+  const rawRuntimeContext: VideoRequestRuntimeContext = {
+    apiKey,
+    apiBase,
+    endpoint: resolvedEndpoint,
+    requestModel: requestModel || resolvedVideoModelId || '',
+    resolvedModelId: resolvedVideoModelId || '',
+    apiSpec: resolveVideoApiSpec(resolvedVideoModel, resolvedEndpoint, requestModel || resolvedVideoModelId || ''),
+  };
+  const runtimeContext = coerceVideoApiSpec(rawRuntimeContext);
 
-  if (isVolcengineTaskMode) {
+  if (runtimeContext.apiSpec === 'volcengine-task') {
     return generateVideoVolcengineTask(
-      prompt,
-      startImageBase64,
-      endImageBase64,
-      apiKey,
-      apiBase,
-      aspectRatio,
-      duration,
-      requestModel || resolvedVideoModelId || VOLCENGINE_DEFAULT_MODEL,
-      resolvedEndpoint || VOLCENGINE_TASK_DEFAULT_ENDPOINT
+      unifiedRequest,
+      runtimeContext,
+      unifiedRequest.aspectRatio,
+      unifiedRequest.duration
     );
   }
 
-  const isAsyncMode =
-    (resolvedVideoModel?.params as any)?.mode === 'async' ||
-    normalizedRequestModel.startsWith('veo_3_1-fast');
-
   // 异步模式
-  if (isAsyncMode) {
+  if (runtimeContext.apiSpec === 'openai-videos') {
     return generateVideoAsync(
-      prompt,
-      startImageBase64,
-      endImageBase64,
-      apiKey,
-      aspectRatio,
-      duration,
-      requestModel || resolvedVideoModelId || 'sora-2'
+      unifiedRequest,
+      runtimeContext,
+      unifiedRequest.aspectRatio,
+      unifiedRequest.duration
     );
   }
 
   // 同步模式：直接使用模型配置中的请求模型名
-  const actualModel = requestModel || resolvedVideoModelId || 'sora-2';
+  const actualModel = runtimeContext.requestModel || 'sora-2';
+  const chatEndpoint = normalizeChatEndpoint(runtimeContext.endpoint);
 
   const messages: any[] = [
-    { role: 'user', content: prompt }
+    { role: 'user', content: unifiedRequest.prompt }
   ];
 
-  const cleanStart = startImageBase64?.replace(/^data:image\/(png|jpeg|jpg);base64,/, '') || '';
-  const cleanEnd = endImageBase64?.replace(/^data:image\/(png|jpeg|jpg);base64,/, '') || '';
+  const cleanStart = unifiedRequest.startImage?.replace(/^data:image\/(png|jpeg|jpg);base64,/, '') || '';
+  const cleanEnd = unifiedRequest.endImage?.replace(/^data:image\/(png|jpeg|jpg);base64,/, '') || '';
 
   if (cleanStart) {
     messages[0].content = [
-      { type: 'text', text: prompt },
+      { type: 'text', text: unifiedRequest.prompt },
       {
         type: 'image_url',
         image_url: { url: `data:image/png;base64,${cleanStart}` }
@@ -559,22 +695,37 @@ export const generateVideo = async (
     }
   }
 
+  const extraReferenceImages = dedupeImageInputs(unifiedRequest.referenceImages || []).filter(
+    (img) => img !== unifiedRequest.startImage && img !== unifiedRequest.endImage
+  );
+  if (Array.isArray(messages[0].content) && extraReferenceImages.length > 0) {
+    extraReferenceImages.slice(0, 4).forEach((image) => {
+      const clean = image.replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
+      messages[0].content.push({
+        type: 'image_url',
+        image_url: { url: clean.startsWith('http') ? image : `data:image/png;base64,${clean}` }
+      });
+    });
+  }
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 1200000);
 
   try {
     const response = await retryOperation(async () => {
-      const res = await fetch(`${apiBase}/v1/chat/completions`, {
+      const res = await fetch(`${runtimeContext.apiBase}${chatEndpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          'Authorization': `Bearer ${runtimeContext.apiKey}`
         },
         body: JSON.stringify({
           model: actualModel,
           messages: messages,
           stream: false,
-          temperature: 0.7
+          temperature: 0.7,
+          ...(unifiedRequest.modelVersion ? { model_version: unifiedRequest.modelVersion } : {}),
+          ...(unifiedRequest.providerOptions || {}),
         }),
         signal: controller.signal
       });

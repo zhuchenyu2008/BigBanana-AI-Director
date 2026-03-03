@@ -34,6 +34,21 @@ export type VideoDuration = 4 | 5 | 8 | 10 | 12 | 15;
  */
 export type VideoMode = 'sync' | 'async';
 
+/**
+ * 视频模型 API 协议类型
+ */
+export type VideoApiSpec = 'openai-videos' | 'volcengine-task' | 'chat-completions' | 'custom';
+
+/**
+ * 视频模型能力声明
+ */
+export interface VideoModelCapabilities {
+  supportsStartFrame: boolean;
+  supportsEndFrame: boolean;
+  maxReferenceImages: number;
+  supportsModelVersion?: boolean;
+}
+
 // ============================================
 // 模型参数配置
 // ============================================
@@ -67,6 +82,9 @@ export interface VideoModelParams {
   supportedAspectRatios: AspectRatio[];
   defaultDuration: VideoDuration;
   supportedDurations: VideoDuration[];
+  defaultModelVersion?: string;
+  apiSpec?: VideoApiSpec;
+  capabilities?: VideoModelCapabilities;
 }
 
 /**
@@ -192,10 +210,15 @@ export interface ImageGenerateOptions {
  */
 export interface VideoGenerateOptions {
   prompt: string;
+  model?: string;
   startImage?: string;
   endImage?: string;
+  referenceImages?: string[];
   aspectRatio?: AspectRatio;
   duration?: VideoDuration;
+  modelVersion?: string;
+  metadata?: Record<string, any>;
+  providerOptions?: Record<string, string | number | boolean>;
 }
 
 // ============================================
@@ -238,6 +261,13 @@ export const DEFAULT_VIDEO_PARAMS_VEO: VideoModelParams = {
   supportedAspectRatios: ['16:9', '9:16'],  // Veo 不支持 1:1
   defaultDuration: 8,
   supportedDurations: [8],  // Veo 固定时长
+  apiSpec: 'chat-completions',
+  capabilities: {
+    supportsStartFrame: true,
+    supportsEndFrame: true,
+    maxReferenceImages: 2,
+    supportsModelVersion: false,
+  },
 };
 
 /**
@@ -249,6 +279,13 @@ export const DEFAULT_VIDEO_PARAMS_SORA: VideoModelParams = {
   supportedAspectRatios: ['16:9', '9:16', '1:1'],
   defaultDuration: 8,
   supportedDurations: [4, 8, 12],
+  apiSpec: 'openai-videos',
+  capabilities: {
+    supportsStartFrame: true,
+    supportsEndFrame: false,
+    maxReferenceImages: 1,
+    supportsModelVersion: true,
+  },
 };
 
 /**
@@ -260,6 +297,13 @@ export const DEFAULT_VIDEO_PARAMS_VEO_FAST: VideoModelParams = {
   supportedAspectRatios: ['16:9', '9:16'],
   defaultDuration: 8,
   supportedDurations: [8],
+  apiSpec: 'openai-videos',
+  capabilities: {
+    supportsStartFrame: true,
+    supportsEndFrame: true,
+    maxReferenceImages: 2,
+    supportsModelVersion: true,
+  },
 };
 
 /**
@@ -272,6 +316,13 @@ export const DEFAULT_VIDEO_PARAMS_DOUBAO_SEEDANCE: VideoModelParams = {
   supportedAspectRatios: ['16:9', '9:16'],
   defaultDuration: 5,
   supportedDurations: [5, 10, 15],
+  apiSpec: 'volcengine-task',
+  capabilities: {
+    supportsStartFrame: true,
+    supportsEndFrame: false,
+    maxReferenceImages: 1,
+    supportsModelVersion: false,
+  },
 };
 
 // ============================================
