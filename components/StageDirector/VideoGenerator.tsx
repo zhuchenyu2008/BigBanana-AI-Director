@@ -17,7 +17,7 @@ interface VideoGeneratorProps {
   shot: Shot;
   hasStartFrame: boolean;
   hasEndFrame: boolean;
-  onGenerate: (aspectRatio: AspectRatio, duration: VideoDuration, modelId: string) => void;
+  onGenerate: (aspectRatio: AspectRatio, duration: VideoDuration, modelId: string, modelVersion?: string) => void;
   onEditPrompt: () => void;
   onModelChange?: (modelId: string) => void;
 }
@@ -123,7 +123,11 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({
   }, [shot.videoModel]);
 
   const handleGenerate = () => {
-    onGenerate(aspectRatio, duration, effectiveModelId);
+    const autoModelVersion =
+      (shot.interval?.videoModelVersion || '').trim() ||
+      (selectedModel?.params?.defaultModelVersion || '').trim() ||
+      (effectiveModelId.toLowerCase() === 'veo_3_1-fast-4k' ? '4k' : undefined);
+    onGenerate(aspectRatio, duration, effectiveModelId, autoModelVersion);
   };
 
   const handleVeoFastQualityChange = (quality: 'standard' | '4k') => {

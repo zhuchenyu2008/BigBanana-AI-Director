@@ -186,6 +186,9 @@ const StageDirector: React.FC<Props> = ({ project, updateProject, onApiKeyError,
     if (/PUBLIC_ERROR_AUDIO_FILTERED/i.test(normalizedMessage)) {
       return '视频生成被平台安全策略拦截（音频相关风控）。请移除提示词中的音乐/歌声/歌词/旁白等声音描述后重试。';
     }
+    if (/PUBLIC_ERROR_UNSAFE_GENERATION/i.test(normalizedMessage)) {
+      return '视频生成被平台安全策略拦截（内容风险）。请降低暴力/血腥/成人/仇恨等描述强度，改为中性表述后重试。';
+    }
     if (/RESOURCE_EXHAUSTED/i.test(normalizedMessage) || /quota/i.test(normalizedMessage)) {
       return '视频生成额度已耗尽或触发限流（RESOURCE_EXHAUSTED）。请稍后重试，或更换可用视频模型/API Key。';
     }
@@ -551,7 +554,13 @@ const StageDirector: React.FC<Props> = ({ project, updateProject, onApiKeyError,
   * @param duration - 视频时长（仅异步模型有效）
    * @param modelId - 视频模型 ID
    */
-  const handleGenerateVideo = async (shot: Shot, aspectRatio: AspectRatio = '16:9', duration: VideoDuration = 8, modelId?: string) => {
+  const handleGenerateVideo = async (
+    shot: Shot,
+    aspectRatio: AspectRatio = '16:9',
+    duration: VideoDuration = 8,
+    modelId?: string,
+    modelVersion?: string
+  ) => {
     const sKf = shot.keyframes?.find(k => k.type === 'start');
     const eKf = shot.keyframes?.find(k => k.type === 'end');
     
@@ -700,16 +709,24 @@ const StageDirector: React.FC<Props> = ({ project, updateProject, onApiKeyError,
       `Generate video (${selectedModel})`
     );
     
+    const configuredDefaultModelVersion = (selectedModelConfig?.params?.defaultModelVersion || '').trim() || undefined;
+    const resolvedModelVersion = (modelVersion || '').trim() || configuredDefaultModelVersion || (
+      selectedModelInput.toLowerCase() === 'veo_3_1-fast-4k' ? '4k' : undefined
+    );
+
     // 更新 shot 的 videoModel
     updateShot(shot.id, (s) => ({
       ...s,
       videoModel: selectedModel as any,
-      interval: s.interval ? { ...s.interval, status: 'generating', videoPrompt, promptVersions: intervalPromptVersions } : {
+      interval: s.interval
+        ? { ...s.interval, status: 'generating', videoPrompt, videoModelVersion: resolvedModelVersion, promptVersions: intervalPromptVersions }
+        : {
         id: intervalId,
         startKeyframeId: sKf?.id || '',
         endKeyframeId: routedEndKeyframeId,
         duration: duration,
         motionStrength: 5,
+        videoModelVersion: resolvedModelVersion,
         videoPrompt,
         promptVersions: intervalPromptVersions,
         status: 'generating'
@@ -717,13 +734,24 @@ const StageDirector: React.FC<Props> = ({ project, updateProject, onApiKeyError,
     }));
     
     try {
+      const auxiliaryReferences = useNineGridAsAuxReference && shot.nineGrid?.imageUrl
+        ? [shot.nineGrid.imageUrl]
+        : [];
       const videoUrl = await generateVideo(
-        videoPrompt, 
-        routedFrames.startImage,
-        routedFrames.endImage,
-        selectedModel,
-        aspectRatio,
-        duration
+        {
+          prompt: videoPrompt,
+          model: selectedModel,
+          modelVersion: resolvedModelVersion,
+          startImage: routedFrames.startImage,
+          endImage: routedFrames.endImage,
+          referenceImages: auxiliaryReferences,
+          aspectRatio,
+          duration,
+          metadata: {
+            shot_id: shot.id,
+            input_mode: videoInputMode,
+          },
+        }
       );
       const persistedVideoUrl = await persistVideoReference(videoUrl, {
         projectId: project.projectId || project.id,
@@ -733,12 +761,15 @@ const StageDirector: React.FC<Props> = ({ project, updateProject, onApiKeyError,
 
       updateShot(shot.id, (s) => ({
         ...s,
-        interval: s.interval ? { ...s.interval, videoUrl: persistedVideoUrl, status: 'completed', promptVersions: intervalPromptVersions } : {
+        interval: s.interval
+          ? { ...s.interval, videoUrl: persistedVideoUrl, status: 'completed', videoModelVersion: resolvedModelVersion, promptVersions: intervalPromptVersions }
+          : {
           id: intervalId,
           startKeyframeId: sKf?.id || '',
           endKeyframeId: routedEndKeyframeId,
           duration: duration,
           motionStrength: 5,
+          videoModelVersion: resolvedModelVersion,
           videoPrompt,
           promptVersions: intervalPromptVersions,
           videoUrl: persistedVideoUrl,
@@ -749,12 +780,15 @@ const StageDirector: React.FC<Props> = ({ project, updateProject, onApiKeyError,
       console.error(e);
       updateShot(shot.id, (s) => ({
         ...s,
-        interval: s.interval ? { ...s.interval, status: 'failed', promptVersions: intervalPromptVersions } : {
+        interval: s.interval
+          ? { ...s.interval, status: 'failed', videoModelVersion: resolvedModelVersion, promptVersions: intervalPromptVersions }
+          : {
           id: intervalId,
           startKeyframeId: sKf?.id || '',
           endKeyframeId: routedEndKeyframeId,
           duration: duration,
           motionStrength: 5,
+          videoModelVersion: resolvedModelVersion,
           videoPrompt,
           promptVersions: intervalPromptVersions,
           status: 'failed'
@@ -1668,7 +1702,9 @@ const StageDirector: React.FC<Props> = ({ project, updateProject, onApiKeyError,
             onCopyNextStartFrame={handleCopyNextStartFrame}
             useAIEnhancement={useAIEnhancement}
             onToggleAIEnhancement={() => setUseAIEnhancement(!useAIEnhancement)}
-            onGenerateVideo={(aspectRatio, duration, modelId) => handleGenerateVideo(activeShot, aspectRatio, duration, modelId)}
+            onGenerateVideo={(aspectRatio, duration, modelId, modelVersion) =>
+              handleGenerateVideo(activeShot, aspectRatio, duration, modelId, modelVersion)
+            }
             onVideoModelChange={(modelId) => {
               const model = getModelById(modelId);
               const lines = [

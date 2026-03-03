@@ -208,6 +208,7 @@ export interface VideoInterval {
   endKeyframeId: string;
   duration: number;
   motionStrength: number;
+  videoModelVersion?: string;
   videoUrl?: string; // 视频数据，存储为base64格式（data:video/mp4;base64,...），避免URL过期问题
   videoPrompt?: string; // 视频生成时使用的提示词
   promptVersions?: PromptVersion[]; // Prompt edit history with rollback support

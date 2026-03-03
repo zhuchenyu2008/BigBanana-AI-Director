@@ -14,6 +14,7 @@ import {
   VideoModelDefinition,
   AspectRatio,
   VideoDuration,
+  VideoModelParams,
 } from '../types/model';
 
 const MODEL_REGISTRY_ENDPOINT = '/api/config/model-registry';
@@ -57,6 +58,51 @@ const dedupeById = <T extends { id: string }>(items: T[]): T[] => {
   });
 };
 
+const normalizeVideoParams = (params: any, endpoint?: string): VideoModelParams => {
+  const normalizedEndpoint = (endpoint || '').toLowerCase();
+  const mode = params?.mode === 'sync' ? 'sync' : 'async';
+  const defaultAspectRatio = params?.defaultAspectRatio || '16:9';
+  const supportedAspectRatios = Array.isArray(params?.supportedAspectRatios) && params.supportedAspectRatios.length
+    ? params.supportedAspectRatios
+    : ['16:9', '9:16'];
+  const defaultDuration = params?.defaultDuration || 8;
+  const supportedDurations = Array.isArray(params?.supportedDurations) && params.supportedDurations.length
+    ? params.supportedDurations
+    : [8];
+  const defaultModelVersion =
+    typeof params?.defaultModelVersion === 'string' && params.defaultModelVersion.trim()
+      ? params.defaultModelVersion.trim()
+      : undefined;
+  const apiSpec =
+    params?.apiSpec ||
+    (normalizedEndpoint.includes('/contents/generations/tasks')
+      ? 'volcengine-task'
+      : normalizedEndpoint.includes('/chat/completions')
+        ? 'chat-completions'
+        : 'openai-videos');
+
+  const fallbackCapabilities =
+    apiSpec === 'volcengine-task'
+      ? { supportsStartFrame: true, supportsEndFrame: false, maxReferenceImages: 1, supportsModelVersion: false }
+      : apiSpec === 'chat-completions'
+        ? { supportsStartFrame: true, supportsEndFrame: true, maxReferenceImages: 2, supportsModelVersion: false }
+        : { supportsStartFrame: true, supportsEndFrame: false, maxReferenceImages: 1, supportsModelVersion: true };
+
+  return {
+    mode,
+    defaultAspectRatio,
+    supportedAspectRatios,
+    defaultDuration,
+    supportedDurations,
+    defaultModelVersion,
+    apiSpec,
+    capabilities: {
+      ...fallbackCapabilities,
+      ...(params?.capabilities || {}),
+    },
+  } as VideoModelParams;
+};
+
 const normalizeRegistryState = (raw: any): ModelRegistryState => {
   const providerCandidates: ModelProvider[] = (Array.isArray(raw?.providers) ? raw.providers : []).map((provider: any) => ({
     id: (provider?.id || '').trim(),
@@ -74,17 +120,23 @@ const normalizeRegistryState = (raw: any): ModelRegistryState => {
     .map((model: any) => {
       const id = (model?.id || '').trim();
       const apiModel = (model?.apiModel || '').trim() || id;
+      const endpoint = model?.endpoint?.trim() || undefined;
+      const normalizedParams =
+        model?.type === 'video'
+          ? normalizeVideoParams(model?.params, endpoint)
+          : model?.params;
       return {
         ...model,
         id,
         apiModel,
         name: (model?.name || id).trim(),
         providerId: (model?.providerId || '').trim(),
-        endpoint: model?.endpoint?.trim() || undefined,
+        endpoint,
         description: model?.description?.trim() || undefined,
         apiKey: model?.apiKey?.trim() || undefined,
         isBuiltIn: Boolean(model?.isBuiltIn),
         isEnabled: model?.isEnabled !== false,
+        params: normalizedParams,
       } as ModelDefinition;
     })
     .filter((model) => providerIds.has(model.providerId));

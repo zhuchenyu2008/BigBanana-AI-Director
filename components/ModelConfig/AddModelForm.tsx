@@ -9,6 +9,7 @@ import {
   ModelType, 
   ModelDefinition,
   ImageApiFormat,
+  VideoApiSpec,
   ChatModelParams,
   ImageModelParams,
   VideoModelParams,
@@ -117,18 +118,38 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
             : '/v1beta/models/{model}:generateContent';
       }
     } else {
-      params =
+      const inferredApiSpec: VideoApiSpec =
+        videoMode === 'sync'
+          ? 'chat-completions'
+          : videoMode === 'task'
+            ? 'volcengine-task'
+            : 'openai-videos';
+      const inferredCapabilities =
+        inferredApiSpec === 'chat-completions'
+          ? { supportsStartFrame: true, supportsEndFrame: true, maxReferenceImages: 2, supportsModelVersion: false }
+          : inferredApiSpec === 'volcengine-task'
+            ? { supportsStartFrame: true, supportsEndFrame: false, maxReferenceImages: 1, supportsModelVersion: false }
+            : { supportsStartFrame: true, supportsEndFrame: false, maxReferenceImages: 1, supportsModelVersion: true };
+      const videoParams: VideoModelParams =
         videoMode === 'sync'
           ? { ...DEFAULT_VIDEO_PARAMS_VEO }
           : videoMode === 'task'
             ? { ...DEFAULT_VIDEO_PARAMS_DOUBAO_SEEDANCE }
             : { ...DEFAULT_VIDEO_PARAMS_SORA };
+      params = {
+        ...videoParams,
+        apiSpec: inferredApiSpec,
+        capabilities: {
+          ...videoParams.capabilities,
+          ...inferredCapabilities,
+        },
+      };
 
       if (!resolvedEndpoint) {
         resolvedEndpoint =
-          videoMode === 'sync'
+          inferredApiSpec === 'chat-completions'
             ? '/v1/chat/completions'
-            : videoMode === 'task'
+            : inferredApiSpec === 'volcengine-task'
               ? '/api/v3/contents/generations/tasks'
               : '/v1/videos';
       }
@@ -379,7 +400,7 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
             </button>
           </div>
           <p className="text-[9px] text-[var(--text-muted)] mt-1">
-            同步模式：直接返回结果；Sora 类异步：`/v1/videos`；火山任务类：`/api/v3/contents/generations/tasks`
+            同步模式：直接返回结果；Sora 类异步：`/v1/videos`；火山任务类：`/api/v3/contents/generations/tasks`。其余能力会自动识别，无需手动配置。
           </p>
         </div>
       )}

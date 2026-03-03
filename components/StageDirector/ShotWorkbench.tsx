@@ -69,7 +69,7 @@ interface ShotWorkbenchProps {
   onCopyNextStartFrame: () => void;
   useAIEnhancement: boolean;
   onToggleAIEnhancement: () => void;
-  onGenerateVideo: (aspectRatio: AspectRatio, duration: VideoDuration, modelId: string) => void;
+  onGenerateVideo: (aspectRatio: AspectRatio, duration: VideoDuration, modelId: string, modelVersion?: string) => void;
   onEditVideoPrompt: () => void;
   onVideoModelChange: (modelId: string) => void;
   onImageClick: (url: string, title: string) => void;
